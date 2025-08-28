@@ -63,10 +63,11 @@
     <div id="menu" role="dialog" aria-modal="true">
       <div class="panel">
         <h1>⚔️ Dueling Runner</h1>
-        <p>Run, jump & duck obstacles. When a foe appears, time your <em>duel</em>:
+        <p>Run, jump & downstab obstacles. When a foe appears, time your <em>duel</em>:
           dodge high/mid/low attacks and counter with your sword. Flying foes need high hits; shielded foes shift a <em>plasma shield</em> (high/mid/low) — strike around it.</p>
-        <p><strong>Controls</strong> — ←/→ move, ↑ or Space jump (↑ again = double jump), hold ↓ fast-fall.<br/>
-        J/K/L = high/mid/low attack. <strong>Downstab</strong>: hold ↓ in the air and press J, K, or L — crushes crates & instantly defeats mobs.</p>
+        <p><strong>Controls</strong> — ←/→ move, ↑ or Space jump (↑ again = double jump).<br/>
+        <strong>↓ (in air)</strong> = Fast-fall Downstab (breaks crates, instantly defeats mobs).<br/>
+        <strong>Z/X/C</strong> = High/Mid/Low forward attack.</p>
         <div class="btn" id="startBtn">Start</div>
       </div>
     </div>
@@ -90,15 +91,15 @@
       </div>
       <div class="cluster">
         <div class="tbtn" data-act="jump">⤴</div>
-        <div class="tbtn" data-act="atkH">H</div>
-        <div class="tbtn" data-act="atkM">M</div>
-        <div class="tbtn" data-act="atkL">L</div>
+        <div class="tbtn" data-act="atkH">Z</div>
+        <div class="tbtn" data-act="atkM">X</div>
+        <div class="tbtn" data-act="atkL">C</div>
       </div>
     </div>
   </div>
 
   <script>
-  // === Dueling Runner — Single file (with Downstab + VFX) ===
+  // === Dueling Runner — No Ducking, Downstab on ↓, Z/X/C attacks ===
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
@@ -152,7 +153,8 @@
 
   // Player
   const playerBase = {
-    x:120, y:H-120, w:36, h:54, vx:0, vy:0, speed:4.2, onGround:false, ducking:false, hearts:3, invuln:0, attackTimer:0, attackType:null, parryFlash:0,
+    x:120, y:H-120, w:36, h:54, vx:0, vy:0, speed:4.2, onGround:false, hearts:3, invuln:0,
+    attackTimer:0, attackType:null, parryFlash:0,
     kbx:0,
     usedDouble:false, doubleCD:0, fastFalling:false,
     downstab:false
@@ -176,7 +178,7 @@
   }
 
   // Screen-edge flash when double jump recharges
-  let djFlash=0; // ms remaining
+  let djFlash=0;
 
   // World
   let scrollX=0, groundY=H-80, score=0, spawnTimer=0, obstacleTimer=0, difficultyTime=0, wave=1, nextWaveAt=500;
@@ -198,9 +200,27 @@
     showBanner('Go!');
   }
 
-  // Inputs
-  addEventListener('keydown', e=>{ keys.add(e.key); justPressed.add(e.key); if(e.key===' '||e.key==='ArrowUp') e.preventDefault(); });
-  addEventListener('keyup', e=>{ keys.delete(e.key); });
+  // Inputs (including Z/X/C mapping)
+  addEventListener('keydown', e=>{
+    keys.add(e.key); justPressed.add(e.key);
+    if(e.key===' '||e.key==='ArrowUp') e.preventDefault();
+
+    // ↓ triggers downstab/fast-fall when airborne
+    if(e.key==='ArrowDown' && !player.onGround){
+      if(!player.downstab){ SFX.crush(); }
+      player.downstab = true;
+      player.fastFalling = true;
+      player.attackType = 'down';
+      player.attackTimer = 280;
+    }
+  });
+  addEventListener('keyup', e=>{
+    keys.delete(e.key);
+    if(e.key==='ArrowDown'){
+      player.fastFalling = false;
+      player.downstab = false;
+    }
+  });
   document.getElementById('startBtn').onclick=()=> resetGame();
   document.getElementById('retryBtn').onclick=()=> resetGame();
 
@@ -231,18 +251,12 @@
   // Helpers
   function aabb(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
 
-  // ATTACKS
+  // Forward attacks: Z/X/C
   function tryPlayerAttack(which){
-    // Downstab: if airborne & holding down, any attack triggers downstab
-    if(!player.onGround && keys.has('ArrowDown')){
-      player.attackType='down'; player.attackTimer=280; player.downstab=true; SFX.crush();
-      return;
-    }
-
     if(player.attackTimer>0) return;
-    player.attackType=which; player.attackTimer=200; player.downstab=false; SFX.attack();
+    player.attackType=which; player.attackTimer=200; SFX.attack();
 
-    // RUN: break obstacles with LOW attack straight ahead
+    // RUN: low forward slash can break crates ahead
     if(state===State.RUN && which==='low'){
       const reach=58;
       const attackBox={ x:player.x+player.w, y:player.y+player.h-20, w:reach, h:18 };
@@ -269,7 +283,6 @@
       if(duel.foe.kind==='shielded' && duel.shieldPos===which) blocked=true;
       if(duel.foe.kind==='flying' && which!=='high') blocked=true;
 
-      // Parry
       if(duel.activeStrike && duel.parryWindow>0){
         const zone = zoneFromY(duel.activeStrike.y);
         if(zone===which){
@@ -296,7 +309,8 @@
   }
 
   function applyPlayerPhysics(){
-    const left = keys.has('ArrowLeft')||keys.has('a'); const right = keys.has('ArrowRight')||keys.has('d'); const move=(right?1:0)-(left?1:0);
+    const left = keys.has('ArrowLeft')||keys.has('a'); const right = keys.has('ArrowRight')||keys.has('d');
+    const move=(right?1:0)-(left?1:0);
     player.vx = move*player.speed;
 
     if(state===State.DUEL){
@@ -306,9 +320,6 @@
     }
 
     const wantJump = justPressed.has(' ')||justPressed.has('ArrowUp');
-    player.ducking = keys.has('ArrowDown');
-    player.fastFalling = !player.onGround && keys.has('ArrowDown');
-
     if(wantJump){
       if(player.onGround){
         doGroundJump();
@@ -317,7 +328,10 @@
       }
     }
 
-    // Gravity (faster if fast-falling)
+    // ↓ = fast-fall (and we may have set downstab in keydown)
+    player.fastFalling = keys.has('ArrowDown') && !player.onGround;
+
+    // Gravity
     const g = player.fastFalling ? 0.85 : 0.45;
     player.vy += g;
     player.y += player.vy;
@@ -325,7 +339,8 @@
     // Knockback decay
     if(Math.abs(player.kbx) > 0.01){ player.x += player.kbx; player.kbx *= 0.88; }
 
-    const standH=54, duckH=34; player.h = (player.ducking && state!==State.DUEL)? duckH : standH;
+    // Fixed height (no ducking)
+    player.h = 54;
 
     const wasAir = !player.onGround;
     if(player.y+player.h>=groundY){ player.y=groundY-player.h; if(wasAir){ player.vy=0; } player.onGround=true; player.downstab=false; }
@@ -337,10 +352,10 @@
     if(player.invuln>0) player.invuln-=16.67;
     if(player.parryFlash>0) player.parryFlash-=16.67;
     if(player.doubleCD>0) player.doubleCD-=16.67;
-    if(prevCD>0 && player.doubleCD<=0){ djFlash=420; } // flash when recharged
-    if(player.onGround && player.doubleCD<=0) player.usedDouble=false; // can recharge only after cooldown
+    if(prevCD>0 && player.doubleCD<=0){ djFlash=420; }
+    if(player.onGround && player.doubleCD<=0) player.usedDouble=false;
 
-    // Update particles
+    // VFX updates
     for(let i=particles.length-1;i>=0;i--){
       const p=particles[i];
       p.x += p.vx; p.y += p.vy; p.vy += 0.22; p.life -= 16.67;
@@ -379,7 +394,7 @@
   function collidePlayerWithObstacle(o, idx){
     if(state!==State.RUN) return false;
 
-    // Try downstab crush first (new)
+    // Try downstab crush first
     if(maybeDownstabCrush(o)){
       obstacles.splice(idx,1);
       return true;
@@ -433,11 +448,11 @@
     });
     for(let i=mobs.length-1;i>=0;i--){ if(mobs[i].x+mobs[i].w<-20) mobs.splice(i,1); }
 
-    // Collisions: player vs obstacles (allow attack-break + downstab)
+    // Collisions: player vs obstacles (allow low-side slash + downstab)
     for(let i=obstacles.length-1;i>=0;i--){
       const o=obstacles[i];
 
-      // low attack side-break (kept)
+      // low attack side-break
       if(player.attackType==='low' && player.attackTimer>0){
         const sideHit={ x:player.x+player.w-2, y:o.y-6, w:60, h:o.h+12 };
         if(aabb(sideHit,o)){
@@ -463,21 +478,19 @@
       }
     }
 
-    // Player vs mobs: check Downstab instant-kill BEFORE duel trigger
+    // Player vs mobs: Downstab instant-kill BEFORE duel trigger
     for(let i=0;i<mobs.length;i++){
       const m=mobs[i];
       const pb={x:player.x,y:player.y,w:player.w,h:player.h};
       if(aabb(pb,m)){
-        if(player.downstab && player.vy>0){ // falling downstab
-          // pop the mob with VFX & bounce
+        if(player.downstab && player.vy>0){
           spawnCrushVFX(m.x + m.w/2, m.y, '#ff86a6');
           SFX.crush();
-          player.vy = -12.0; // stronger bounce for mobs
+          player.vy = -12.0;
           score += 120;
           mobs.splice(i,1);
           break;
         } else {
-          // regular contact → duel
           const foe={...m};
           mobs.splice(i,1);
           beginDuel(foe);
@@ -576,14 +589,18 @@
       }
     }
 
+    // Dodge logic without ducking:
+    //  - high: jump high
+    //  - mid: small hop or downstab (counts as changing hurtbox timing)
+    //  - low: Downstab replaces crouch
     if(duel.activeStrike){
       const s=duel.activeStrike;
       const pb={x:player.x,y:player.y,w:player.w,h:player.h};
       if(aabb(pb,s)){
         const zone=zoneFromY(s.y);
         const dodged=(zone==='high' && player.y+player.h < groundY-120) ||
-                     (zone==='low' && (keys.has('ArrowDown')||player.h<40)) ||
-                     (zone==='mid' && (player.y+player.h<groundY-90 || keys.has('ArrowDown')));
+                     (zone==='mid' && (player.y+player.h<groundY-90 || player.downstab)) ||
+                     (zone==='low' && player.downstab);
         if(!dodged) damagePlayer();
       }
     }
@@ -675,7 +692,7 @@
   ];
   const palWing = { W:'#b29cff' };
 
-  function drawKnight(x,y,w,h,attackType,attackTimer,ducking,parryFlash){
+  function drawKnight(x,y,w,h,attackType,attackTimer,parryFlash){
     const gw = knightGrid[0].length, gh = knightGrid.length;
     const scale = Math.floor(Math.min(w/gw, h/gh));
     const sx = x + Math.floor((w - gw*scale)/2);
@@ -689,9 +706,8 @@
       ctx.fillRect(x-2, y-2, w+4, h+4);
     }
 
-    // Sword pose
-    if(attackType==='down'){
-      // straight down blade
+    // Sword pose (downstab vs forward)
+    if(attackType==='down' && !player.onGround){
       const t = attackTimer>0 ? 1 - attackTimer/280 : 0;
       const reach = 14 + Math.floor(28*t);
       const bladeW = 4;
@@ -700,7 +716,6 @@
       ctx.fillStyle = '#e6ecff';
       ctx.fillRect(x + w/2 - bladeW/2, y + h - 2, bladeW, reach);
     } else {
-      // forward slashes
       const handYHigh = y + 6;
       const handYMid  = y + h*0.45;
       const handYLow  = y + h*0.75;
@@ -716,7 +731,7 @@
   }
 
   function drawGoblin(m){
-    const scale = 3; // bigger mobs
+    const scale = 3;
     if(m.kind==='flying'){
       drawPixelGrid(goblinFlying, {...palGob, ...palWing}, m.x, (groundY-170), scale);
     }else{
@@ -728,7 +743,6 @@
     const y = m.kind==='flying'? (groundY-170) : (groundY-72);
     ctx.fillText(glyphs[m.weapon]||'?', m.x+8, y+16);
 
-    // visible hitbox ring
     ctx.strokeStyle='rgba(255,255,255,0.18)';
     const r = (m.kind==='flying'? 26 : 32);
     ctx.beginPath();
@@ -745,7 +759,6 @@
     });
   }
 
-  // Plasma shield (lane-colored, glow)
   function drawPlasmaShield(box, lane){
     const laneColor = lane==='high' ? getComputedStyle(document.documentElement).getPropertyValue('--plasma-hi').trim()
                       : lane==='mid' ? getComputedStyle(document.documentElement).getPropertyValue('--plasma-mid').trim()
@@ -758,7 +771,6 @@
     ctx.globalAlpha=0.85;
     ctx.fillRect(box.x-14, y, 12, 14);
     ctx.restore();
-
     ctx.strokeStyle='rgba(255,255,255,0.25)';
     ctx.strokeRect(box.x-14, y, 12, 14);
   }
@@ -858,7 +870,7 @@
   function drawPlayer(){
     ctx.save();
     ctx.globalAlpha = player.invuln>0? 0.7:1;
-    drawKnight(player.x, player.y, player.w, player.h, player.attackType||'mid', player.attackTimer, player.ducking, player.parryFlash);
+    drawKnight(player.x, player.y, player.w, player.h, player.attackType||'mid', player.attackTimer, player.parryFlash);
 
     // On-player double-jump ring when ready (subtle)
     if(player.doubleCD<=0 && !player.onGround){
@@ -878,7 +890,6 @@
   }
 
   function drawHearts(){
-    // kept from previous version – cute hearts in-canvas
     const MAX = 3, size = 16, gap = 8, startX = 18, startY = 18;
     for(let i=0;i<MAX;i++){
       const cx = startX + i*(size + gap) + size/2;
@@ -918,19 +929,19 @@
     requestAnimationFrame(frame);
   }
 
-  // Attack keys
+  // Attack keys: Z/X/C
   addEventListener('keydown', e=>{
     if(state===State.MENU && (e.key==='Enter'||e.key===' ')) resetGame();
     if(state===State.GAMEOVER && (e.key==='Enter'||e.key===' ')) resetGame();
-    if(e.key==='j'||e.key==='J') tryPlayerAttack('high');
-    if(e.key==='k'||e.key==='K') tryPlayerAttack('mid');
-    if(e.key==='l'||e.key==='L') tryPlayerAttack('low');
+    if(e.key==='z'||e.key==='Z') tryPlayerAttack('high');
+    if(e.key==='x'||e.key==='X') tryPlayerAttack('mid');
+    if(e.key==='c'||e.key==='C') tryPlayerAttack('low');
   });
 
   // Touch buttons → keys
   (function(){
     const touch=document.getElementById('touch');
-    const bindings={left:'ArrowLeft', right:'ArrowRight', down:'ArrowDown', jump:' ', atkH:'j', atkM:'k', atkL:'l'};
+    const bindings={left:'ArrowLeft', right:'ArrowRight', down:'ArrowDown', jump:' ', atkH:'z', atkM:'x', atkL:'c'};
     function press(k){ keys.add(k); justPressed.add(k);}
     function release(k){ keys.delete(k);}
     function bind(el,key){
@@ -954,8 +965,9 @@
       const dx=t.clientX-sx, dy=t.clientY-sy;
       if(Math.abs(dx)<TH && Math.abs(dy)<TH) return;
       if(Math.abs(dy)>Math.abs(dx)){
-        if(dy<-TH){ justPressed.add(' '); }
-        else { keys.add('ArrowDown'); setTimeout(()=> keys.delete('ArrowDown'), 220); }
+        if(dy<-TH){ justPressed.add(' '); }              // jump
+        else { keys.add('ArrowDown');                    // downstab/fast-fall
+               setTimeout(()=> { keys.delete('ArrowDown'); player.downstab=false; player.fastFalling=false; }, 220); }
       } else {
         if(dx>TH){ keys.add('ArrowRight'); setTimeout(()=> keys.delete('ArrowRight'), 160); }
         else if(dx<-TH){ keys.add('ArrowLeft'); setTimeout(()=> keys.delete('ArrowLeft'), 160); }
