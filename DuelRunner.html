@@ -144,7 +144,10 @@
   const rnd = (a,b)=> Math.random()*(b-a)+a; const clamp=(v,a,b)=> Math.max(a, Math.min(b,v));
 
   // Player
-  const playerBase = { x:120, y:H-120, w:36, h:54, vx:0, vy:0, speed:4.2, onGround:false, ducking:false, hearts:3, invuln:0, attackTimer:0, attackType:null, parryFlash:0 };
+  const playerBase = { 
+    x:120, y:H-120, w:36, h:54, vx:0, vy:0, speed:4.2, onGround:false, ducking:false, hearts:3, invuln:0, attackTimer:0, attackType:null, parryFlash:0,
+    kbx:0 // ★ knockback X velocity
+  };
   let player = { ...playerBase };
 
   // World
@@ -174,8 +177,21 @@
   document.getElementById('retryBtn').onclick=()=> resetGame();
 
   // Spawning
-  function spawnObstacle(){ const gap=rnd(160,320); const w=rnd(24,60), h=rnd(20,40); const x=W+gap; obstacles.push({x, y:groundY-h, w, h, type:'crate'}); }
-  function spawnMob(){ const kinds=['regular','flying','shielded']; const weapons=['sword','spear','bow','punch']; const kind=kinds[Math.floor(Math.random()*kinds.length)]; const weapon=weapons[Math.floor(Math.random()*weapons.length)]; const m={x:W+60,y:groundY-48,w:40,h:48,kind,weapon,speed:4.1}; if(kind==='flying'){ m.y=groundY-160; m.h=32; m.w=44; } mobs.push(m); }
+  function spawnObstacle(){ 
+    const gap=rnd(200,360); // ★ slightly wider natural gaps
+    const w=rnd(24,60), h=rnd(20,40); 
+    const x=W+gap; 
+    obstacles.push({x, y:groundY-h, w, h, type:'crate'}); 
+  }
+  function spawnMob(){ 
+    const kinds=['regular','flying','shielded']; 
+    const weapons=['sword','spear','bow','punch']; 
+    const kind=kinds[Math.floor(Math.random()*kinds.length)]; 
+    const weapon=weapons[Math.floor(Math.random()*weapons.length)]; 
+    const m={x:W+60,y:groundY-48,w:40,h:48,kind,weapon,speed:4.1, kbx:0}; // ★ add mob knockback velocity
+    if(kind==='flying'){ m.y=groundY-160; m.h=32; m.w=44; } 
+    mobs.push(m); 
+  }
 
   // Helpers
   function aabb(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
@@ -183,12 +199,25 @@
   function applyPlayerPhysics(){
     const left = keys.has('ArrowLeft')||keys.has('a'); const right = keys.has('ArrowRight')||keys.has('d'); const move=(right?1:0)-(left?1:0);
     player.vx = move*player.speed;
-    if(state===State.DUEL){ player.x = clamp(player.x + player.vx, duel.arenaX-60, duel.arenaX+60); }
-    else { player.x = clamp(player.x + player.vx, 40, W*0.45); }
 
+    // Movement bounds depend on state
+    if(state===State.DUEL){ 
+      player.x = clamp(player.x + player.vx, duel.arenaX-60, duel.arenaX+60); 
+    } else { 
+      player.x = clamp(player.x + player.vx, 40, W*0.45); 
+    }
+
+    // Jump/Duck
     const wantJump = justPressed.has(' ')||justPressed.has('ArrowUp'); player.ducking = keys.has('ArrowDown');
     if(wantJump && player.onGround){ player.vy=-10.5; player.onGround=false; SFX.jump(); }
-    player.vy += 0.45; player.y += player.vy;
+    player.vy += 0.45; 
+    player.y += player.vy;
+
+    // ★ Apply and decay knockback
+    if(Math.abs(player.kbx) > 0.01){
+      player.x += player.kbx;
+      player.kbx *= 0.88;
+    }
 
     const standH=54, duckH=34; player.h = (player.ducking && state!==State.DUEL)? duckH : standH;
     if(player.y+player.h>=groundY){ player.y=groundY-player.h; player.vy=0; player.onGround=true; }
@@ -202,7 +231,7 @@
       const reach=52; const hitbox={ x:player.x+player.w, y:player.y + (which==='high'?0:(which==='mid'?player.h*0.33:player.h*0.66)) - 8, w:reach, h:16 };
       let blocked=false; if(duel.foe.kind==='shielded' && duel.shieldPos===which) blocked=true; if(duel.foe.kind==='flying' && which!=='high') blocked=true;
 
-      // Parry: if attack matches incoming zone within short window of strike activation
+      // Parry
       if(duel.activeStrike && duel.parryWindow>0){
         const zone = zoneFromY(duel.activeStrike.y);
         if(zone===which){ duel.activeStrike=null; duel.parryWindow=0; duel.foeHP=Math.max(0,duel.foeHP-1); SFX.parry(); player.parryFlash=220; score+=75; if(duel.foeHP<=0) endDuel(true); return; }
@@ -246,21 +275,101 @@
     if(duel.activeStrike){ const s=duel.activeStrike; const pb={x:player.x,y:player.y,w:player.w,h:player.h}; if(aabb(pb,s)){ const zone=zoneFromY(s.y); const dodged=(zone==='high' && player.y+player.h < groundY-120) || (zone==='low' && (keys.has('ArrowDown')||player.h<40)) || (zone==='mid' && (player.y+player.h<groundY-90 || keys.has('ArrowDown'))); if(!dodged) damagePlayer(); } }
   }
 
-  function damagePlayer(){ if(player.invuln>0) return; player.hearts-=1; player.invuln=900; SFX.hurt(); if(player.hearts<=0){ state=State.GAMEOVER; hud.over.hidden=false; hud.final.textContent=`Score: ${Math.floor(score)}`; SFX.over(); } }
+  function damagePlayer(){ 
+    if(player.invuln>0) return; 
+    player.hearts-=1; 
+    player.invuln=900; 
+    SFX.hurt(); 
+    if(player.hearts<=0){ 
+      state=State.GAMEOVER; hud.over.hidden=false; hud.final.textContent=`Score: ${Math.floor(score)}`; SFX.over(); 
+    } 
+  }
+
+  // ★ When the player bumps an obstacle during RUN: hurt + knockback
+  function collidePlayerWithObstacle(o){
+    if(state!==State.RUN) return;
+    if(player.invuln<=0){ damagePlayer(); }
+    // Push player slightly back and up
+    player.kbx = -5.5;
+    player.vy = Math.min(player.vy, -6);
+    // simple separation so we don't get stuck inside the obstacle
+    if(player.x + player.w > o.x && player.x < o.x) player.x = o.x - player.w - 1;
+    SFX.hit();
+  }
+
+  // ★ Mob/obstacle collision knockback (no damage, just bounce)
+  function collideMobWithObstacle(m,o){
+    // only ground mobs collide with ground obstacles
+    if(m.kind==='flying') return;
+    // Resolve collision from left
+    if(m.x + m.w > o.x && m.x < o.x){
+      m.x = o.x - m.w - 1;
+      m.kbx = 5.5; // shove to the right
+    } else if(m.x < o.x + o.w && m.x > o.x){ // from right (rare)
+      m.x = o.x + o.w + 1;
+      m.kbx = -5.0;
+    }
+  }
 
   function updateRun(dt){
-    difficultyTime+=dt; const diff=Math.min(3.2, 1 + difficultyTime/20000); const runSpeed=5.2*diff; scrollX+=runSpeed; score+=dt*0.06*diff;
+    difficultyTime+=dt; const diff=Math.min(3.2, 1 + difficultyTime/20000);
+    const runSpeed=5.2*diff; 
+    scrollX+=runSpeed; score+=dt*0.06*diff;
     if(score>=nextWaveAt){ showBanner(`Wave ${++wave}`); nextWaveAt+=500+150*wave; }
 
-    obstacleTimer-=dt; if(obstacleTimer<=0){ const base=700/diff; obstacleTimer=base + Math.random()*(900/diff); spawnObstacle(); }
-    spawnTimer-=dt; if(spawnTimer<=0){ const base=2000/diff; spawnTimer=base + Math.random()*(1600/diff); spawnMob(); }
+    // ★ FEWER OBSTACLES: increase base interval substantially
+    obstacleTimer-=dt; 
+    if(obstacleTimer<=0){ 
+      const base=1300/diff; // was 700/diff
+      obstacleTimer=base + Math.random()*(1100/diff); // was up to ~900/diff
+      spawnObstacle(); 
+    }
 
-    obstacles.forEach(o=> o.x -= runSpeed); for(let i=obstacles.length-1;i>=0;i--){ if(obstacles[i].x+obstacles[i].w<-20) obstacles.splice(i,1); }
-    mobs.forEach(m=> m.x -= m.speed*diff*0.9); for(let i=mobs.length-1;i>=0;i--){ if(mobs[i].x+mobs[i].w<-20) mobs.splice(i,1); }
+    spawnTimer-=dt; 
+    if(spawnTimer<=0){ 
+      const base=2000/diff; 
+      spawnTimer=base + Math.random()*(1600/diff); 
+      spawnMob(); 
+    }
 
-    for(const o of obstacles){ if(aabb({x:player.x,y:player.y,w:player.w,h:player.h}, o)) damagePlayer(); }
+    // Move world
+    obstacles.forEach(o=> o.x -= runSpeed); 
+    for(let i=obstacles.length-1;i>=0;i--){ if(obstacles[i].x+obstacles[i].w<-20) obstacles.splice(i,1); }
 
-    for(let i=0;i<mobs.length;i++){ const m=mobs[i]; const pb={x:player.x,y:player.y,w:player.w,h:player.h}; if(aabb(pb,m)){ const foe={...m}; mobs.splice(i,1); beginDuel(foe); break; } }
+    mobs.forEach(m=> { 
+      m.x -= m.speed*diff*0.9; 
+      // ★ apply mob knockback with decay
+      if(Math.abs(m.kbx)>0.01){ m.x += m.kbx; m.kbx *= 0.88; }
+    }); 
+    for(let i=mobs.length-1;i>=0;i--){ if(mobs[i].x+mobs[i].w<-20) mobs.splice(i,1); }
+
+    // Collisions: player vs obstacles
+    for(const o of obstacles){ 
+      if(aabb({x:player.x,y:player.y,w:player.w,h:player.h}, o)) { 
+        collidePlayerWithObstacle(o); 
+      } 
+    }
+
+    // Collisions: mobs vs obstacles
+    for(const m of mobs){
+      for(const o of obstacles){
+        if(aabb({x:m.x,y:m.y,w:m.w,h:m.h}, o)){
+          collideMobWithObstacle(m,o);
+        }
+      }
+    }
+
+    // Trigger duel when touching mob
+    for(let i=0;i<mobs.length;i++){ 
+      const m=mobs[i]; 
+      const pb={x:player.x,y:player.y,w:player.w,h:player.h}; 
+      if(aabb(pb,m)){ 
+        const foe={...m}; 
+        mobs.splice(i,1); 
+        beginDuel(foe); 
+        break; 
+      } 
+    }
   }
 
   // Rendering
