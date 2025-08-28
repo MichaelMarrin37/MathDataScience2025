@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Duel Runner</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #222;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: white;
+      font-family: sans-serif;
+    }
+    canvas {
+      border: 2px solid #fff;
+      background-color: #333;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let keys = {};
+    document.addEventListener("keydown", e => keys[e.code] = true);
+    document.addEventListener("keyup", e => keys[e.code] = false);
+
+    let player = {
+      x: 50,
+      y: 300,
+      width: 40,
+      height: 60,
+      vy: 0,
+      grounded: true,
+      state: "running"
+    };
+
+    let gravity = 1;
+    let playerHealth = 3;
+    let mobHealth = 3;
+    let swordSwing = null;
+    let swingTimer = 0;
+
+    let duelActive = false;
+    let duelTimer = 0;
+    let mobInDuel = null;
+
+    let mobs = [
+      { x: 600, y: 300, type: "grounded", shieldZone: "mid", duel: true },
+      { x: 1000, y: 200, type: "flying", duel: true }
+    ];
+
+    function getRandomZone() {
+      return ["high", "mid", "low"][Math.floor(Math.random() * 3)];
+    }
+
+    function startDuel(mob) {
+      duelActive = true;
+      mobInDuel = mob;
+      duelTimer = 0;
+      mob.attackZone = getRandomZone();
+      if (mob.type === "grounded") {
+        mob.shieldZone = getRandomZone();
+      }
+    }
+
+    function endDuel() {
+      duelActive = false;
+      player.state = "running";
+      mobInDuel.duel = false;
+      mobInDuel = null;
+      mobHealth = 3;
+    }
+
+    function attemptAttack(zone) {
+      swordSwing = zone;
+      swingTimer = 10;
+
+      if (mobInDuel.type === "flying") {
+        if (zone === "high") {
+          mobHealth--;
+        }
+      } else {
+        if (mobInDuel.shieldZone !== zone) {
+          mobHealth--;
+        }
+      }
+
+      if (mobHealth <= 0) {
+        endDuel();
+      }
+    }
+
+    function handleDuelInput() {
+      if (!duelActive || !mobInDuel) return;
+
+      if (keys["KeyW"]) attemptAttack("high");
+      if (keys["KeyD"]) attemptAttack("mid");
+      if (keys["KeyS"]) attemptAttack("low");
+
+      if (keys["ArrowLeft"] || keys["ArrowRight"]) {
+        if (mobInDuel.attackZone === "mid") {
+          // Dodged
+        } else {
+          playerHealth--;
+        }
+        mobInDuel.attackZone = getRandomZone();
+        if (mobInDuel.type === "grounded") {
+          mobInDuel.shieldZone = getRandomZone();
+        }
+      }
+    }
+
+    function updateDuel() {
+      if (!duelActive || !mobInDuel) return;
+      duelTimer++;
+      if (duelTimer > 90) {
+        duelTimer = 0;
+        mobInDuel.attackZone = getRandomZone();
+        if (mobInDuel.type === "grounded") {
+          mobInDuel.shieldZone = getRandomZone();
+        }
+      }
+    }
+
+    function update() {
+      if (player.state === "running") {
+        if (keys["ArrowUp"] && player.grounded) {
+          player.vy = -15;
+          player.grounded = false;
+        }
+
+        if (keys["ArrowDown"] && player.grounded) {
+          player.height = 30;
+        } else {
+          player.height = 60;
+        }
+
+        player.y += player.vy;
+        player.vy += gravity;
+
+        if (player.y >= 300) {
+          player.y = 300;
+          player.vy = 0;
+          player.grounded = true;
+        }
+
+        mobs.forEach(mob => {
+          if (mob.x > player.x + 50 && mob.duel && player.state === "running") {
+            mob.x -= 3;
+          } else if (mob.duel && !duelActive) {
+            player.state = "dueling";
+            startDuel(mob);
+          }
+        });
+      }
+
+      if (duelActive) {
+        handleDuelInput();
+        updateDuel();
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Health Bars
+      ctx.fillStyle = "white";
+      ctx.fillText("Player HP", 20, 20);
+      for (let i = 0; i < playerHealth; i++) {
+        ctx.fillStyle = "blue";
+        ctx.fillRect(20 + i * 30, 30, 20, 10);
+      }
+
+      if (duelActive && mobInDuel) {
+        ctx.fillStyle = "white";
+        ctx.fillText("Mob HP", canvas.width - 120, 20);
+        for (let i = 0; i < mobHealth; i++) {
+          ctx.fillStyle = "red";
+          ctx.fillRect(canvas.width - 120 + i * 30, 30, 20, 10);
+        }
+      }
+
+      // Player
+      ctx.fillStyle = "blue";
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      // Sword Swing
+      if (swingTimer > 0 && swordSwing) {
+        ctx.fillStyle = "cyan";
+        let offsetY = swordSwing === "high" ? -20 : swordSwing === "mid" ? 10 : 30;
+        ctx.fillRect(player.x + player.width, player.y + offsetY, 20, 10);
+        swingTimer--;
+        if (swingTimer === 0) swordSwing = null;
+      }
+
+      // Mobs
+      mobs.forEach(mob => {
+        ctx.fillStyle = mob.type === "flying" ? "red" : "green";
+        ctx.fillRect(mob.x, mob.y, 40, 40);
+
+        if (duelActive && mobInDuel === mob) {
+          // Attack zone
+          ctx.fillStyle = "red";
+          if (mob.attackZone === "high") ctx.fillRect(mob.x, mob.y - 20, 40, 10);
+          if (mob.attackZone === "mid") ctx.fillRect(mob.x, mob.y + 10, 40, 10);
+          if (mob.attackZone === "low") ctx.fillRect(mob.x, mob.y + 30, 40, 10);
+
+          // Shield zone
+          if (mob.type === "grounded") {
+            ctx.fillStyle = "gray";
+            if (mob.shieldZone === "high") ctx.fillRect(mob.x, mob.y - 20, 40, 10);
+            if (mob.shieldZone === "mid") ctx.fillRect(mob.x, mob.y + 10, 40, 10);
+            if (mob.shieldZone === "low") ctx.fillRect(mob.x, mob.y + 30, 40, 10);
+          }
+        }
+      });
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
