@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Muscle Car Drag Racing</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #222;
+      color: #fff;
+      text-align: center;
+    }
+    #gameCanvas {
+      width: 800px;
+      height: 400px;
+      background: url('track1.jpg') no-repeat center;
+      background-size: cover;
+      margin: 20px auto;
+      position: relative;
+    }
+    .car {
+      width: 100px;
+      height: 50px;
+      background: red;
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      transition: left 0.2s ease;
+    }
+    .girl {
+      position: absolute;
+      top: 10px;
+      width: 100px;
+      height: 150px;
+      background: pink;
+    }
+    #startGirl { left: 10px; }
+    #finishGirl { right: 10px; }
+    #controls {
+      margin-top: 20px;
+    }
+    button {
+      margin: 5px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🏁 Muscle Car Drag Racing</h1>
+  <div id="gameCanvas">
+    <div class="girl" id="startGirl"></div>
+    <div class="girl" id="finishGirl"></div>
+    <div class="car" id="playerCar"></div>
+  </div>
+  <div id="controls">
+    <button onclick="useNitrous()">Nitrous Boost</button>
+    <button onclick="manualShift()">Manual Shift</button>
+    <button onclick="drift()">Drift</button>
+    <button onclick="startRace()">Start Race</button>
+  </div>
+
+  <script>
+    const car = document.getElementById('playerCar');
+    const canvas = document.getElementById('gameCanvas');
+    const tracks = ['track1.jpg', 'track2.jpg', 'track3.jpg'];
+
+    function randomizeTrack() {
+      const randomTrack = tracks[Math.floor(Math.random() * tracks.length)];
+      canvas.style.backgroundImage = `url('${randomTrack}')`;
+    }
+
+    let position = 0;
+    function moveCar(distance) {
+      position += distance;
+      car.style.left = position + 'px';
+      if (position >= 700) {
+        alert("🏆 You finished the race!");
+        position = 0;
+        car.style.left = '0px';
+      }
+    }
+
+    function useNitrous() {
+      moveCar(100);
+    }
+
+    function manualShift() {
+      moveCar(50);
+    }
+
+    function drift() {
+      moveCar(30);
+    }
+
+    function startRace() {
+      randomizeTrack();
+      position = 0;
+      car.style.left = '0px';
+    }
+  </script>
+</body>
+</html>
