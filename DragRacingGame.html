@@ -2,42 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>American Muscle Drag Racing</title>
+  <title>Cartoon Muscle Drag Racing</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
+      background-color: #222;
+      font-family: Arial, sans-serif;
       overflow: hidden;
-      background-color: #111;
-      font-family: 'Segoe UI', sans-serif;
-      color: #fff;
     }
+
     #gameCanvas {
       width: 100vw;
       height: 100vh;
-      background-image: url('track1.jpg'); /* Drag strip background */
-      background-size: cover;
-      background-position: center;
       position: relative;
+      background: linear-gradient(#444, #222);
     }
-    .car {
-      width: 100px;
-      height: 50px;
-      background: red;
-      position: absolute;
-      bottom: 50px;
-      left: 50px;
-      transition: transform 0.1s ease;
-    }
-    .girl {
-      position: absolute;
-      width: 80px;
-      height: 150px;
-      background: pink;
-      top: 20px;
-    }
-    #startGirl { left: 20px; }
-    #finishGirl { right: 20px; }
+
     #startBtn {
       position: absolute;
       top: 20px;
@@ -46,10 +27,46 @@
       padding: 10px 20px;
       font-size: 18px;
       background: #ff0044;
-      border: none;
       color: white;
+      border: none;
       cursor: pointer;
       z-index: 10;
+    }
+
+    .car {
+      width: 100px;
+      height: 50px;
+      background: #ffcc00;
+      border: 3px solid #000;
+      position: absolute;
+      transition: transform 0.1s ease;
+    }
+
+    .girl {
+      width: 60px;
+      height: 120px;
+      background: #ff69b4;
+      border: 2px solid #fff;
+      position: absolute;
+      top: 20px;
+    }
+
+    #startGirl { left: 20px; }
+    #finishGirl { right: 20px; }
+
+    #finishLine {
+      position: absolute;
+      right: 50px;
+      top: 0;
+      bottom: 0;
+      width: 10px;
+      background: repeating-linear-gradient(
+        to bottom,
+        white,
+        white 10px,
+        black 10px,
+        black 20px
+      );
     }
   </style>
 </head>
@@ -58,40 +75,56 @@
     <button id="startBtn" onclick="startRace()">Start Race</button>
     <div class="girl" id="startGirl"></div>
     <div class="girl" id="finishGirl"></div>
+    <div id="finishLine"></div>
     <div class="car" id="playerCar"></div>
   </div>
 
   <script>
-    const canvas = document.getElementById('gameCanvas');
     const car = document.getElementById('playerCar');
-    let x = 50, y = window.innerHeight - 100;
+    const canvas = document.getElementById('gameCanvas');
+    const canvasWidth = window.innerWidth;
+    const canvasHeight = window.innerHeight;
+
+    let x = 50;
+    let y = canvasHeight - 100;
     let speed = 10;
 
     function startRace() {
       x = 50;
-      y = window.innerHeight - 100;
+      y = canvasHeight - 100;
+      speed = 10;
+      car.style.transform = 'rotate(0deg)';
       updateCarPosition();
     }
 
     function updateCarPosition() {
+      // Clamp position within canvas
+      x = Math.max(0, Math.min(canvasWidth - 100, x));
+      y = Math.max(0, Math.min(canvasHeight - 50, y));
       car.style.left = x + 'px';
       car.style.top = y + 'px';
+
+      // Check for finish line
+      if (x + 100 >= canvasWidth - 50) {
+        alert("🏁 You finished the race!");
+        startRace();
+      }
     }
 
     document.addEventListener('keydown', (e) => {
       switch (e.key.toLowerCase()) {
-        case 'w': y -= speed; break; // Forward
-        case 's': y += speed; break; // Reverse
-        case 'a': x -= speed; break; // Left
-        case 'd': x += speed; break; // Right
-        case 'l': speedBoost(); break; // Nitrous
-        case ';': manualShift(); break; // Manual Shift
-        case "'": drift(); break; // Drift
+        case 'w': y -= speed; break;
+        case 's': y += speed; break;
+        case 'a': x -= speed; break;
+        case 'd': x += speed; break;
+        case 'l': nitrousBoost(); break;
+        case ';': manualShift(); break;
+        case "'": drift(); break;
       }
       updateCarPosition();
     });
 
-    function speedBoost() {
+    function nitrousBoost() {
       x += 100;
     }
 
@@ -104,6 +137,10 @@
       car.style.transform = 'rotate(-15deg)';
       setTimeout(() => car.style.transform = 'rotate(0deg)', 200);
     }
+
+    window.onload = () => {
+      updateCarPosition();
+    };
   </script>
 </body>
 </html>
