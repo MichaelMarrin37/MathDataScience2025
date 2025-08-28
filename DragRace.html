@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Muscle Car Drag Race</title>
+  <title>Mustang vs Challenger Drag Race</title>
   <style>
     body {
       background: #111;
@@ -16,7 +16,7 @@
       position: relative;
       width: 90%;
       max-width: 800px;
-      height: 200px;
+      height: 240px;
       margin: 40px auto;
       background: #333;
       border: 4px solid #fff;
@@ -31,80 +31,210 @@
       background: yellow;
     }
 
-    #startLine {
-      left: 0;
-    }
-
-    #finishLine {
-      right: 0;
-    }
+    #startLine { left: 0; }
+    #finishLine { right: 0; }
 
     .car {
       position: absolute;
       width: 80px;
       height: 40px;
-      top: 0;
-      background: red;
       border: 2px solid #fff;
       border-radius: 5px;
+      transition: left 0.05s linear;
     }
 
-    #car1 {
+    #mustang {
       top: 40px;
-      background: crimson;
+      background: firebrick;
     }
 
-    #car2 {
+    #challenger {
       top: 120px;
       background: steelblue;
     }
 
-    button {
+    .smoke {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: gray;
+      border-radius: 50%;
+      opacity: 0;
+      animation: puff 0.5s ease-out;
+    }
+
+    @keyframes puff {
+      0% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(3); }
+    }
+
+    #countdown {
+      font-size: 28px;
       margin-top: 20px;
+      color: lime;
+    }
+
+    .flash {
+      animation: flash 0.5s infinite;
+    }
+
+    @keyframes flash {
+      0% { background-color: yellow; }
+      50% { background-color: red; }
+      100% { background-color: yellow; }
+    }
+
+    #restartBtn {
+      margin-top: 15px;
       padding: 10px 20px;
-      font-size: 18px;
-      cursor: pointer;
+      font-size: 16px;
       background: limegreen;
       border: none;
       border-radius: 5px;
+      cursor: pointer;
       color: #000;
+    }
+
+    #leaderboard {
+      margin-top: 20px;
+      font-size: 16px;
+      color: #ccc;
     }
   </style>
 </head>
 <body>
-  <h1>🏁 Muscle Car Drag Race 🏁</h1>
+  <h1>🏎️ Mustang vs Challenger 🏎️</h1>
   <div id="track">
     <div id="startLine" class="line"></div>
     <div id="finishLine" class="line"></div>
-    <div id="car1" class="car"></div>
-    <div id="car2" class="car"></div>
+    <div id="mustang" class="car"></div>
+    <div id="challenger" class="car"></div>
   </div>
-  <button onclick="startRace()">Start Race</button>
+
+  <div id="countdown">Press Start to Begin</div>
+  <button id="restartBtn" onclick="startRace()">Start / Restart Race</button>
+  <div id="leaderboard"></div>
+
+  <!-- Sound Effects -->
+  <audio id="engine" preload="auto">
+    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" type="audio/wav">
+  </audio>
+  <audio id="boost" preload="auto">
+    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" type="audio/wav">
+  </audio>
+  <audio id="win" preload="auto">
+    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" type="audio/wav">
+  </audio>
 
   <script>
+    const mustang = document.getElementById('mustang');
+    const challenger = document.getElementById('challenger');
+    const countdown = document.getElementById('countdown');
+    const trackWidth = document.getElementById('track').offsetWidth;
+    const finishLine = trackWidth - 80;
+    const leaderboard = document.getElementById('leaderboard');
+
+    const engineSound = document.getElementById('engine');
+    const boostSound = document.getElementById('boost');
+    const winSound = document.getElementById('win');
+
+    let posMustang = 0;
+    let posChallenger = 0;
+    let boostMustang = false;
+    let boostChallenger = false;
+    let raceOver = true;
+    let startTime = 0;
+
     function startRace() {
-      const car1 = document.getElementById('car1');
-      const car2 = document.getElementById('car2');
-      const trackWidth = document.getElementById('track').offsetWidth;
-      const finishLine = trackWidth - 80; // car width
+      posMustang = 0;
+      posChallenger = 0;
+      boostMustang = false;
+      boostChallenger = false;
+      raceOver = true;
+      mustang.style.left = '0px';
+      challenger.style.left = '0px';
+      countdown.classList.remove('flash');
+      countdown.textContent = '3';
+      leaderboard.innerHTML = '';
 
-      let pos1 = 0;
-      let pos2 = 0;
-
-      const raceInterval = setInterval(() => {
-        pos1 += Math.random() * 5;
-        pos2 += Math.random() * 5;
-
-        car1.style.left = pos1 + 'px';
-        car2.style.left = pos2 + 'px';
-
-        if (pos1 >= finishLine || pos2 >= finishLine) {
-          clearInterval(raceInterval);
-          let winner = pos1 > pos2 ? 'Camaro (Red)' : 'Challenger (Blue)';
-          alert(`🏆 ${winner} wins the race!`);
-        }
-      }, 50);
+      setTimeout(() => countdown.textContent = '2', 1000);
+      setTimeout(() => countdown.textContent = '1', 2000);
+      setTimeout(() => {
+        countdown.textContent = 'GO!';
+        raceOver = false;
+        startTime = performance.now();
+        engineSound.play();
+      }, 3000);
     }
-  </script>
-</body>
-</html>
+
+    document.addEventListener('keydown', (e) => {
+      if (raceOver) return;
+
+      // Mustang Controls
+      if (e.key === 'ArrowRight') {
+        posMustang += boostMustang ? 20 : 10;
+        posMustang = Math.min(posMustang, finishLine);
+        mustang.style.left = posMustang + 'px';
+      }
+      if (e.key === 'ArrowLeft') {
+        posMustang -= boostMustang ? 20 : 10;
+        posMustang = Math.max(posMustang, 0);
+        mustang.style.left = posMustang + 'px';
+      }
+      if (e.key === 'ArrowUp' && !boostMustang) {
+        boostMustang = true;
+        boostSound.play();
+        spawnSmoke(mustang);
+        setTimeout(() => boostMustang = false, 1000);
+      }
+
+      // Challenger Controls
+      if (e.key.toLowerCase() === 'd') {
+        posChallenger += boostChallenger ? 20 : 10;
+        posChallenger = Math.min(posChallenger, finishLine);
+        challenger.style.left = posChallenger + 'px';
+      }
+      if (e.key.toLowerCase() === 'a') {
+        posChallenger -= boostChallenger ? 20 : 10;
+        posChallenger = Math.max(posChallenger, 0);
+        challenger.style.left = posChallenger + 'px';
+      }
+      if (e.key.toLowerCase() === 'w' && !boostChallenger) {
+        boostChallenger = true;
+        boostSound.play();
+        spawnSmoke(challenger);
+        setTimeout(() => boostChallenger = false, 1000);
+      }
+
+      checkWinner();
+    });
+
+    function spawnSmoke(car) {
+      const smoke = document.createElement('div');
+      smoke.className = 'smoke';
+      smoke.style.left = car.offsetLeft + 'px';
+      smoke.style.top = car.offsetTop + 'px';
+      document.getElementById('track').appendChild(smoke);
+      setTimeout(() => smoke.remove(), 500);
+    }
+
+    function checkWinner() {
+      if (posMustang >= finishLine || posChallenger >= finishLine) {
+        raceOver = true;
+        const winner = posMustang > posChallenger ? 'Mustang 🔴' : 'Challenger 🔵';
+        const time = ((performance.now() - startTime) / 1000).toFixed(2);
+        countdown.textContent = `🏆 ${winner} wins in ${time}s!`;
+        countdown.classList.add('flash');
+        winSound.play();
+        updateLeaderboard(winner, time);
+      }
+    }
+
+    function updateLeaderboard(winner, time) {
+      const scores = JSON.parse(localStorage.getItem('dragScores') || '[]');
+      scores.push({ winner, time });
+      scores.sort((a, b) => a.time - b.time);
+      localStorage.setItem('dragScores', JSON.stringify(scores.slice(0, 3)));
+
+      leaderboard.innerHTML = `<strong>🏆 Leaderboard:</strong><br>` +
+        scores.slice(0, 3).map((s, i) =>
