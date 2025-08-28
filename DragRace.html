@@ -115,17 +115,6 @@
   <button id="restartBtn" onclick="startRace()">Start / Restart Race</button>
   <div id="leaderboard"></div>
 
-  <!-- Sound Effects -->
-  <audio id="engine" preload="auto">
-    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" type="audio/wav">
-  </audio>
-  <audio id="boost" preload="auto">
-    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" type="audio/wav">
-  </audio>
-  <audio id="win" preload="auto">
-    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" type="audio/wav">
-  </audio>
-
   <script>
     const mustang = document.getElementById('mustang');
     const challenger = document.getElementById('challenger');
@@ -134,15 +123,12 @@
     const finishLine = trackWidth - 80;
     const leaderboard = document.getElementById('leaderboard');
 
-    const engineSound = document.getElementById('engine');
-    const boostSound = document.getElementById('boost');
-    const winSound = document.getElementById('win');
-
     let posMustang = 0;
     let posChallenger = 0;
     let boostMustang = false;
     let boostChallenger = false;
     let raceOver = true;
+    let raceStarted = false;
     let startTime = 0;
 
     function startRace() {
@@ -150,7 +136,8 @@
       posChallenger = 0;
       boostMustang = false;
       boostChallenger = false;
-      raceOver = true;
+      raceOver = false;
+      raceStarted = false;
       mustang.style.left = '0px';
       challenger.style.left = '0px';
       countdown.classList.remove('flash');
@@ -161,14 +148,13 @@
       setTimeout(() => countdown.textContent = '1', 2000);
       setTimeout(() => {
         countdown.textContent = 'GO!';
-        raceOver = false;
+        raceStarted = true;
         startTime = performance.now();
-        engineSound.play();
       }, 3000);
     }
 
     document.addEventListener('keydown', (e) => {
-      if (raceOver) return;
+      if (!raceStarted || raceOver) return;
 
       // Mustang Controls
       if (e.key === 'ArrowRight') {
@@ -183,7 +169,6 @@
       }
       if (e.key === 'ArrowUp' && !boostMustang) {
         boostMustang = true;
-        boostSound.play();
         spawnSmoke(mustang);
         setTimeout(() => boostMustang = false, 1000);
       }
@@ -201,7 +186,6 @@
       }
       if (e.key.toLowerCase() === 'w' && !boostChallenger) {
         boostChallenger = true;
-        boostSound.play();
         spawnSmoke(challenger);
         setTimeout(() => boostChallenger = false, 1000);
       }
@@ -221,11 +205,11 @@
     function checkWinner() {
       if (posMustang >= finishLine || posChallenger >= finishLine) {
         raceOver = true;
+        raceStarted = false;
         const winner = posMustang > posChallenger ? 'Mustang 🔴' : 'Challenger 🔵';
         const time = ((performance.now() - startTime) / 1000).toFixed(2);
         countdown.textContent = `🏆 ${winner} wins in ${time}s!`;
         countdown.classList.add('flash');
-        winSound.play();
         updateLeaderboard(winner, time);
       }
     }
@@ -238,3 +222,9 @@
 
       leaderboard.innerHTML = `<strong>🏆 Leaderboard:</strong><br>` +
         scores.slice(0, 3).map((s, i) =>
+          `${i + 1}. ${s.winner} - ${s.time}s`
+        ).join('<br>');
+    }
+  </script>
+</body>
+</html>
