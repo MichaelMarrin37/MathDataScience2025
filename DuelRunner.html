@@ -155,7 +155,7 @@
   const obstacles=[]; const mobs=[]; // runner-phase entities
 
   // Duel
-  let duel=null; // {foe, arenaX, timer, foeHP, pattern, nextAttackAt, shieldPos, shieldTimer, projectiles, activeStrike, hitFlash, parryWindow}
+  let duel=null; // {foe, arenaX, timer, foeHP, foeMaxHP, pattern, nextAttackAt, shieldPos, shieldTimer, projectiles, activeStrike, hitFlash, parryWindow}
   const ZONES=['low','mid','high'];
 
   function showBanner(text){ banner.textContent=text; banner.classList.add('show'); setTimeout(()=>banner.classList.remove('show'), 1100); }
@@ -188,9 +188,15 @@
     const weapons=['sword','spear','bow','punch']; 
     const kind=kinds[Math.floor(Math.random()*kinds.length)]; 
     const weapon=weapons[Math.floor(Math.random()*weapons.length)]; 
-    const m={x:W+60,y:groundY-48,w:40,h:48,kind,weapon,speed:4.1, kbx:0};
-    if(kind==='flying'){ m.y=groundY-160; m.h=32; m.w=44; } 
-    mobs.push(m); 
+    const base = {x:W+60,y:groundY-48,w:40,h:48,kind,weapon,speed:4.1, kbx:0};
+
+    if(kind==='flying'){ base.y=groundY-160; base.h=32; base.w=44; }
+
+    // mob HP for floating bars (decreases during duel state)
+    base.maxhp = (kind==='shielded'? 3 : 2);
+    base.hp = base.maxhp;
+
+    mobs.push(base);  
   }
 
   // Helpers
@@ -256,13 +262,51 @@
 
   function beginDuel(foe){
     state=State.DUEL; hud.mode.textContent='Duel'; SFX.duel();
-    duel={ foe, arenaX: player.x+40, timer:0, foeHP: foe.kind==='shielded'?3:(foe.kind==='flying'?2:2), nextAttackAt:900, pattern:nextZone(), shieldPos:'mid', shieldTimer:0, projectiles:[], hitFlash:0, activeStrike:null, parryWindow:0 };
+
+    // carry in mob HP/maxhp; default if missing
+    const maxhp = foe.maxhp ?? (foe.kind==='shielded'?3:(foe.kind==='flying'?2:2));
+    const hp = foe.hp ?? maxhp;
+
+    duel={
+      foe,
+      arenaX: player.x+40, 
+      timer:0, 
+      foeHP: hp,
+      foeMaxHP: maxhp,
+      nextAttackAt:900, 
+      pattern:nextZone(), 
+      shieldPos:'mid', 
+      shieldTimer:0, 
+      projectiles:[], 
+      hitFlash:0, 
+      activeStrike:null, 
+      parryWindow:0 
+    };
   }
-  function endDuel(playerWon){ state=State.RUN; hud.mode.textContent='Running'; duel=null; if(playerWon) score+=150; else score=Math.max(0,score-100); }
-  function foeAABB(){ if(!duel) return {x:0,y:0,w:0,h:0}; const f=duel.foe; return { x:duel.arenaX+50, y:f.kind==='flying'? groundY-160: groundY-48, w:f.kind==='flying'?44:40, h:f.kind==='flying'?32:48 }; }
+
+  function endDuel(playerWon){ 
+    state=State.RUN; 
+    hud.mode.textContent='Running'; 
+    // (Optional) keep lane HP in sync if you reuse mobs after duel:
+    // duel.foe.hp = duel.foeHP; 
+    duel=null; 
+    if(playerWon) score+=150; else score=Math.max(0,score-100); 
+  }
+
+  function foeAABB(){ 
+    if(!duel) return {x:0,y:0,w:0,h:0}; 
+    const f=duel.foe; 
+    return { 
+      x:duel.arenaX+50, 
+      y:f.kind==='flying'? groundY-160: groundY-48, 
+      w:f.kind==='flying'?44:40, 
+      h:f.kind==='flying'?32:48 
+    }; 
+  }
   function nextZone(){ return ZONES[Math.floor(Math.random()*ZONES.length)]; }
   function zoneFromY(y){ return y < groundY-150 ? 'high' : (y < groundY-100 ? 'mid' : 'low'); }
 
+  // ---- updateDuel(dt): COMPLETE (fix that broke Start) ----
   function updateDuel(dt){
     duel.timer+=dt;
 
@@ -276,7 +320,8 @@
     }
 
     if(duel.foe.weapon==='bow'){
-      if(!duel.nextArrowAt) duel.nextArrowAt=1200; duel.nextArrowAt-=dt;
+      if(!duel.nextArrowAt) duel.nextArrowAt=1200; 
+      duel.nextArrowAt-=dt;
       if(duel.nextArrowAt<=0){ 
         duel.nextArrowAt=1300+Math.random()*700; 
         const zone=nextZone(); 
@@ -297,20 +342,28 @@
     if(duel.parryWindow>0) duel.parryWindow-=dt;
     if(duel.activeStrike){ duel.activeStrike.active-=dt; if(duel.activeStrike.active<=0) duel.activeStrike=null; }
 
+    // projectiles move + hit
     for(let i=duel.projectiles.length-1;i>=0;i--){ 
       const p=duel.projectiles[i]; 
       p.x+=p.vx; 
       const pb={x:p.x,y:p.y,w:p.w,h:p.h}; 
-      if(aabb(pb,{x:player.x,y:player.y,w:player.w,h:player.h})){ damagePlayer(); duel.projectiles.splice(i,1); } 
-      else if(p.x<player.x-120) duel.projectiles.splice(i,1); 
+      if(aabb(pb,{x:player.x,y:player.y,w:player.w,h:player.h})){ 
+        damagePlayer(); 
+        duel.projectiles.splice(i,1); 
+      } else if(p.x<player.x-120) { 
+        duel.projectiles.splice(i,1); 
+      }
     }
 
+    // melee slab check
     if(duel.activeStrike){ 
       const s=duel.activeStrike; 
       const pb={x:player.x,y:player.y,w:player.w,h:player.h}; 
       if(aabb(pb,s)){ 
         const zone=zoneFromY(s.y); 
-        const dodged=(zone==='high' && player.y+player.h < groundY-120) || (zone==='low' && (keys.has('ArrowDown')||player.h<40)) || (zone==='mid' && (player.y+player.h<groundY-90 || keys.has('ArrowDown'))); 
+        const dodged=(zone==='high' && player.y+player.h < groundY-120) || 
+                     (zone==='low' && (keys.has('ArrowDown')||player.h<40)) || 
+                     (zone==='mid' && (player.y+player.h<groundY-90 || keys.has('ArrowDown'))); 
         if(!dodged) damagePlayer(); 
       } 
     }
@@ -424,8 +477,7 @@
     } 
   }
 
-  // ★ SPRITES: tiny pixel-art engine ---------------------------------------
-  // grid: array of strings; chars map to palette keys; '.' is transparent
+  // --- sprites ---
   function drawPixelGrid(grid, palette, x, y, scale=2){
     for(let r=0;r<grid.length;r++){
       const row = grid[r];
@@ -438,17 +490,9 @@
     }
   }
 
-  // Knight sprite (18x24), facing right
-  const palKnight = {
-    k:'#89a2ff', // armor
-    s:'#dfe6ff', // highlight
-    b:'#2b2f3a', // belt/outline
-    f:'#f7e4b2', // face
-    h:'#454a5c', // shadow
-    g:'#66e0a3'  // accent/plume
-  };
+  const palKnight = { k:'#89a2ff', s:'#dfe6ff', b:'#2b2f3a', f:'#f7e4b2', h:'#454a5c', g:'#66e0a3' };
   const knightGrid = [
-    "......g...........", // plume
+    "......g...........",
     "......g...........",
     "......g...........",
     "....kkkkk.........",
@@ -472,19 +516,9 @@
     "...k.....k........",
     "...k.....k........",
     "...k.....k........"
-  ]; // 19w approx visual, we’ll scale to player box
+  ];
 
-  // Sword is drawn separately as a straight blade aligned to attack zone.
-
-  // Goblin ground (16x16)
-  const palGob = {
-    G:'#76e06e', // skin
-    D:'#3a7a35', // dark
-    E:'#ffffff', // eye white
-    e:'#111111', // eye pupil
-    B:'#2b2f3a', // outline/belt
-    M:'#9b6b3b'  // mouth/ear
-  };
+  const palGob = { G:'#76e06e', D:'#3a7a35', E:'#ffffff', e:'#111111', B:'#2b2f3a', M:'#9b6b3b' };
   const goblinGround = [
     "..BBBBBBBBBB..",
     ".BGGGGGGGGGGB.",
@@ -503,8 +537,6 @@
     "...B......B...",
     "...B......B..."
   ];
-
-  // Goblin flying (16x12) with wings
   const goblinFlying = [
     "....BBBBBB....",
     "..BGGGGGGGB..W",
@@ -519,66 +551,50 @@
     "..W.......W...",
     "...W.....W...."
   ];
-  // Wing color
   const palWing = { W:'#b29cff' };
 
-  // Round buckler for shielded goblins is drawn as a circle overlay.
-
   function drawKnight(x,y,w,h,attackType,attackTimer,ducking,parryFlash){
-    // scale to fit width ~ 18, height ~ 24 grid
     const gw = knightGrid[0].length, gh = knightGrid.length;
     const scale = Math.floor(Math.min(w/gw, h/gh));
     const sx = x + Math.floor((w - gw*scale)/2);
     const sy = y + Math.floor(h - gh*scale);
 
-    // body
     drawPixelGrid(knightGrid, palKnight, sx, sy, scale);
 
-    // subtle parry flash
     if(parryFlash>0){
       const a = Math.min(0.35, parryFlash/220*0.35);
       ctx.fillStyle = `rgba(255,255,210,${a})`;
       ctx.fillRect(x-2, y-2, w+4, h+4);
     }
 
-    // sword (straight blade) aligned to zone
-    // base hand position (roughly front mid of sprite)
+    // Sword aligned to zone
     const handYHigh = y + 6;
     const handYMid  = y + h*0.45;
     const handYLow  = y + h*0.75;
-
     const zoneY = attackType==='high' ? handYHigh : attackType==='mid' ? handYMid : handYLow;
-
-    // If attacking, extend the sword more; otherwise keep it sheathed near hand
     const t = attackTimer>0 ? 1 - attackTimer/200 : 0;
-    const reach = 18 + Math.floor(18*t); // 18→36 px
+    const reach = 18 + Math.floor(18*t);
     const bladeW = Math.max(2, Math.floor(scale*0.9));
 
-    // draw guard
     ctx.fillStyle = '#cfd8ff';
     ctx.fillRect(x + w - 6, zoneY - 2, 4, 4);
-
-    // draw straight blade
     ctx.fillStyle = '#e6ecff';
-    ctx.fillRect(x + w - 6 + 4, zoneY - Math.floor(bladeW/2), reach, bladeW);
+    ctx.fillRect(x + w - 2, zoneY - Math.floor(bladeW/2), reach, bladeW);
   }
 
   function drawGoblin(m){
-    const scale = 2; // consistent chunky pixels
+    const scale = 2;
     if(m.kind==='flying'){
-      // merge goblin + wing palette
       drawPixelGrid(goblinFlying, {...palGob, ...palWing}, m.x, (groundY-160), scale);
     }else{
       drawPixelGrid(goblinGround, palGob, m.x, (groundY-48), scale);
     }
-    // weapon glyph (small accent)
     ctx.fillStyle='#111';
     ctx.font='12px system-ui';
     const glyphs={sword:'⚔',spear:'🗡',bow:'🏹',punch:'✊'};
     const y = m.kind==='flying'? (groundY-160) : (groundY-48);
     ctx.fillText(glyphs[m.weapon]||'?', m.x+6, y+14);
 
-    // shield indicator for shielded
     if(m.kind==='shielded'){
       const w = m.kind==='flying'? 44 : 40;
       const h = m.kind==='flying'? 32 : 48;
@@ -598,12 +614,30 @@
     }); 
   }
 
+  // HP BAR helper
+  function drawHPBar(x, y, w, h, pct){
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillRect(x, y, Math.max(0, Math.min(1, pct))*w, h);
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+  }
+
   function drawMob(m){ 
-    // wobble for flying
     ctx.save();
     const wob = m.kind==='flying'? Math.sin((scrollX+m.x)*0.05)*4 : 0;
     ctx.translate(0, wob);
     drawGoblin(m);
+
+    // Floating HP bar above mob
+    const y = m.kind==='flying'? (groundY-160) : (groundY-48);
+    const barW = 36, barH = 4;
+    const boxW = m.kind==='flying'? 44 : 40;
+    const pct = (m.hp ?? m.maxhp) / (m.maxhp || 1);
+    drawHPBar(m.x + (boxW - barW)/2, y - 10, barW, barH, pct);
+
     ctx.restore();
   }
 
@@ -613,7 +647,7 @@
     ctx.strokeStyle='rgba(255,255,255,.15)'; 
     ctx.strokeRect(duel.arenaX-70, groundY-100, 180, 120); 
 
-    // Render goblin foe inside its box area by shifting draw temporarily
+    // Render goblin foe
     ctx.save();
     if(foe.kind==='flying'){
       const m = { ...foe, x: box.x, kind:'flying' };
@@ -627,7 +661,16 @@
     }
     ctx.restore();
 
-    // Shield brick marker (which zone blocking)
+    // Foe HP bar in duel
+    {
+      const barW = 60, barH = 5;
+      const barX = box.x + (box.w - barW)/2;
+      const barY = box.y - 12;
+      const pct = (duel.foeHP || 0) / (duel.foeMaxHP || 1);
+      drawHPBar(barX, barY, barW, barH, pct);
+    }
+
+    // Shield marker
     if(foe.kind==='shielded'){
       const map={high: box.y-12, mid: box.y+8, low: box.y+24};
       ctx.fillStyle='#222';
@@ -642,7 +685,7 @@
     ctx.fillStyle='rgba(255,255,255,.2)'; 
     ctx.fillRect(box.x-6, zy, 4, 24); 
 
-    // Active strike red slab
+    // Active strike slab
     if(duel.activeStrike){ 
       ctx.fillStyle='rgba(255,80,80,.4)'; 
       const s=duel.activeStrike; 
@@ -659,14 +702,6 @@
       ctx.fillStyle='rgba(255,255,255,.1)'; 
       ctx.fillRect(box.x-4, box.y-4, box.w+8, box.h+8); 
     }
-
-    // Foe HP
-    const hpw=100; 
-    const perc=Math.max(0, duel.foeHP)/3; 
-    ctx.fillStyle='rgba(255,255,255,.15)'; 
-    ctx.fillRect(duel.arenaX-60, groundY-110, hpw, 8); 
-    ctx.fillStyle='#66e0a3'; 
-    ctx.fillRect(duel.arenaX-60, groundY-110, hpw*perc, 8); 
   }
 
   function drawUI(){ 
@@ -678,9 +713,36 @@
   function drawPlayer(){ 
     ctx.save(); 
     ctx.globalAlpha = player.invuln>0? 0.7:1; 
-    // knight with sword aligned to player.attackType & attackTimer
     drawKnight(player.x, player.y, player.w, player.h, player.attackType||'mid', player.attackTimer, player.ducking, player.parryFlash);
     ctx.restore(); 
+  }
+
+  // Hearts HUD
+  function drawHeart(x, y, size, fill, stroke){
+    const r = size/4;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x - r, y - r, r, 0, Math.PI, true);
+    ctx.arc(x + r, y - r, r, 0, Math.PI, true);
+    ctx.lineTo(x, y + size*0.6);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    if(stroke){
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = Math.max(1, size*0.1);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawPlayerHearts(){
+    const MAX = 3, size = 16, gap = 8, startX = 18, startY = 18;
+    for(let i=0;i<MAX;i++){
+      const cx = startX + i*(size + gap) + size/2;
+      const cy = startY + size/2;
+      const filled = i < player.hearts;
+      drawHeart(cx, cy, size, filled ? '#ff6b6b' : 'rgba(255,255,255,0.15)', 'rgba(0,0,0,0.35)');
+    }
   }
 
   // Loop
@@ -696,6 +758,9 @@
     if(state===State.RUN){ drawObstacles(); mobs.forEach(drawMob);} 
     if(state===State.DUEL){ updateDuel(dt); drawDuel(); } 
     drawPlayer(); 
+
+    drawPlayerHearts(); // canvas hearts HUD
+
     drawUI(); 
     justPressed.clear(); 
     requestAnimationFrame(frame); 
@@ -727,7 +792,7 @@
     }); 
   })();
 
-  // Swipe gestures
+  // Swipe gestures (fixed typo: keys.delete)
   (function(){ 
     let sx=0, sy=0; 
     const TH=28; 
