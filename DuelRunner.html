@@ -2,233 +2,570 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Duel Runner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dueling Runner</title>
   <style>
-    body {
-      margin: 0;
-      background-color: #222;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      color: white;
-      font-family: sans-serif;
+    :root {
+      --bg: #0e0f13;
+      --ink: #f2f5f9;
+      --muted: #a7b0c0;
+      --primary: #66e0a3;
+      --danger: #ff6b6b;
+      --amber: #ffca3a;
+      --sky: #6ecbff;
+      --violet: #b29cff;
     }
-    canvas {
-      border: 2px solid #fff;
-      background-color: #333;
+    html, body {
+      margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
     }
+    #wrap { display: grid; place-items: center; height: 100%; padding: 16px; }
+    canvas { 
+      background: linear-gradient(180deg, #11131a 0%, #0e0f13 60%);
+      border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,.5);
+      image-rendering: pixelated; image-rendering: crisp-edges;
+    }
+    #hud { position: absolute; inset: 0; pointer-events:none; display:grid; place-items:start center; padding: 8px; }
+    #hud .row { width: min(960px, 95vw); display:flex; justify-content:space-between; gap:12px; }
+    .pill { background: rgba(255,255,255,.06); backdrop-filter: blur(4px); border:1px solid rgba(255,255,255,.08); border-radius:999px; padding:6px 12px; font-size: 14px; color:var(--muted); }
+    #help { position: absolute; bottom:16px; left:50%; transform:translateX(-50%); display:flex; gap:8px; flex-wrap:wrap; }
+    .kbd { border:1px solid rgba(255,255,255,.2); padding:2px 8px; border-radius:6px; font-weight:600; font-size:12px; color:var(--ink); background: rgba(255,255,255,.06); }
+    #menu, #gameover { position:absolute; inset:0; display:grid; place-items:center; background: radial-gradient(50% 50% at 50% 50%, rgba(0,0,0,.55), rgba(0,0,0,.65)); }
+    .panel { width:min(640px, 92vw); border-radius:16px; padding:24px; background: rgba(17,19,26,.85); border:1px solid rgba(255,255,255,.08); box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+    h1 { margin:0 0 6px; font-size: clamp(24px, 3vw, 36px); letter-spacing:.4px; }
+    p { margin: 8px 0; color: var(--muted); }
+    .btn { display:inline-block; margin-top: 12px; padding:10px 16px; border-radius:12px; background: var(--primary); color:#0b0e12; font-weight:800; text-transform:uppercase; letter-spacing:.6px; cursor:pointer; user-select:none; }
+    .btn:active { transform: translateY(1px); }
+    a { color: var(--sky); }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <div id="wrap">
+    <canvas id="game" width="960" height="540" aria-label="Dueling Runner game canvas"></canvas>
+    <div id="hud" aria-hidden="true">
+      <div class="row">
+        <div class="pill" id="scorePill">Score: 0</div>
+        <div class="pill" id="statePill">Running</div>
+        <div class="pill" id="heartsPill">❤︎❤︎❤︎</div>
+      </div>
+    </div>
+    <div id="menu" role="dialog" aria-modal="true">
+      <div class="panel">
+        <h1>⚔️ Dueling Runner</h1>
+        <p>Dash across the wastes, leap and duck hazards, then face foes in a timed <em>duel</em> where you must dodge high/mid/low attacks and strike back with your dueling sword. Flying mobs demand high strikes. Shielded foes shift a shield between high/mid/low—hit around it!</p>
+        <p><strong>Controls</strong></p>
+        <p>
+          <span class="kbd">←</span>/<span class="kbd">→</span> move •
+          <span class="kbd">↑</span> or <span class="kbd">Space</span> jump •
+          Hold <span class="kbd">↓</span> to duck<br/>
+          Attack: <span class="kbd">J</span> (High) • <span class="kbd">K</span> (Mid) • <span class="kbd">L</span> (Low)
+        </p>
+        <div class="btn" id="startBtn" role="button" tabindex="0">Start</div>
+        <p style="margin-top:10px; font-size:12px; opacity:.8;">Made for GitHub Pages. Single-file HTML — just drop it in a repo.</p>
+      </div>
+    </div>
+    <div id="gameover" hidden role="dialog" aria-modal="true">
+      <div class="panel">
+        <h1>Game Over</h1>
+        <p id="finalScore">Score: 0</p>
+        <div class="btn" id="retryBtn" role="button" tabindex="0">Retry</div>
+      </div>
+    </div>
+    <div id="help" aria-hidden="true">
+      <span class="pill">Jump <span class="kbd">↑</span>/<span class="kbd">Space</span></span>
+      <span class="pill">Duck <span class="kbd">↓</span></span>
+      <span class="pill">Move <span class="kbd">←</span>/<span class="kbd">→</span></span>
+      <span class="pill">Attack <span class="kbd">J</span>/<span class="kbd">K</span>/<span class="kbd">L</span></span>
+    </div>
+  </div>
+
   <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
+  // === Dueling Runner — Vanilla JS HTML5 Canvas Game ===
+  // Structure: basic runner mode + duel mode state machine
+  // No external assets; simple shapes for readability and easy GitHub Pages hosting
 
-    let keys = {};
-    document.addEventListener("keydown", e => keys[e.code] = true);
-    document.addEventListener("keyup", e => keys[e.code] = false);
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
 
-    let player = {
-      x: 50,
-      y: 300,
-      width: 40,
-      height: 60,
-      vy: 0,
-      grounded: true,
-      state: "running"
+  // ----- Game State -----
+  const State = { MENU: 'menu', RUN: 'running', DUEL: 'duel', GAMEOVER: 'gameover' };
+  let state = State.MENU;
+
+  const hud = {
+    score: document.getElementById('scorePill'),
+    hearts: document.getElementById('heartsPill'),
+    mode: document.getElementById('statePill'),
+    menu: document.getElementById('menu'),
+    over: document.getElementById('gameover'),
+    final: document.getElementById('finalScore'),
+  };
+
+  const keys = new Set();
+  const justPressed = new Set(); // edge-triggered keys per frame
+
+  const rnd = (a,b)=> Math.random()*(b-a)+a;
+  const clamp = (v, a, b)=> Math.max(a, Math.min(b, v));
+
+  // ----- Player -----
+  const playerBase = {
+    x: 120, y: H-120, w: 36, h: 54,
+    vx: 0, vy: 0, speed: 4.2,
+    onGround: false, ducking: false,
+    hearts: 3, invuln: 0,
+    attackTimer: 0, attackType: null, // 'high' | 'mid' | 'low'
+  };
+  let player = { ...playerBase };
+
+  // ----- World -----
+  let scrollX = 0;
+  let groundY = H - 80;
+  let score = 0;
+  let spawnTimer = 0;
+  let obstacleTimer = 0;
+
+  // Obstacles and foes in RUN state
+  const obstacles = []; // {x,y,w,h,type}
+  const mobs = []; // {x,y,w,h,kind,weapon,...}
+
+  // Duel context
+  let duel = null; // {foe, arenaX, timer, foeHP, pattern, nextAttackAt, shieldPos}
+
+  const ZONES = ['low','mid','high'];
+
+  function resetGame(){
+    state = State.RUN;
+    player = { ...playerBase, y: groundY-54 };
+    scrollX = 0; score = 0; spawnTimer = 0; obstacleTimer = 0;
+    obstacles.length = 0; mobs.length = 0; duel = null;
+    hud.menu.hidden = true; hud.over.hidden = true;
+  }
+
+  // ----- Input -----
+  addEventListener('keydown', e=>{ keys.add(e.key); justPressed.add(e.key); if(e.key===' '||e.key==='ArrowUp') e.preventDefault(); });
+  addEventListener('keyup', e=>{ keys.delete(e.key); });
+  document.getElementById('startBtn').onclick = ()=> { resetGame(); };
+  document.getElementById('retryBtn').onclick = ()=> { resetGame(); };
+
+  // ----- Spawning -----
+  function spawnObstacle(){
+    const gap = rnd(160, 320);
+    const w = rnd(24, 60), h = rnd(20, 40);
+    const x = W + gap;
+    obstacles.push({ x, y: groundY-h, w, h, type:'crate' });
+  }
+
+  function spawnMob(){
+    const kinds = ['regular','flying','shielded'];
+    const weapons = ['sword','spear','bow','punch'];
+    const kind = kinds[Math.floor(Math.random()*kinds.length)];
+    const weapon = weapons[Math.floor(Math.random()*weapons.length)];
+    const m = { x: W + 60, y: groundY-48, w: 40, h: 48, kind, weapon, speed: 4.1 };
+    if(kind==='flying'){ m.y = groundY - 160; m.h = 32; m.w = 40; }
+    mobs.push(m);
+  }
+
+  // ----- Physics & Helpers -----
+  function aabb(a,b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+  function applyPlayerPhysics(){
+    // Horizontal (free-run or duel arena)
+    const left = keys.has('ArrowLeft') || keys.has('a');
+    const right = keys.has('ArrowRight') || keys.has('d');
+    const move = (right?1:0) - (left?1:0);
+    player.vx = move * player.speed;
+
+    if(state===State.DUEL){
+      // arena bounds
+      player.x = clamp(player.x + player.vx, duel.arenaX-60, duel.arenaX+60);
+    } else {
+      player.x = clamp(player.x + player.vx, 40, W*0.45);
+    }
+
+    // Vertical
+    const wantJump = justPressed.has(' ') || justPressed.has('ArrowUp');
+    player.ducking = keys.has('ArrowDown');
+
+    if(wantJump && player.onGround){
+      player.vy = -10.5;
+      player.onGround = false;
+    }
+
+    player.vy += 0.45; // gravity
+    player.y += player.vy;
+
+    // Ground collision
+    const standHeight = 54;
+    const duckHeight = 34;
+    const targetH = player.ducking && state!==State.DUEL ? duckHeight : standHeight;
+    player.h = targetH;
+
+    if(player.y + player.h >= groundY){
+      player.y = groundY - player.h;
+      player.vy = 0; player.onGround = true;
+    }
+
+    // Attack window timer
+    if(player.attackTimer>0) player.attackTimer -= 16.67;
+    if(player.invuln>0) player.invuln -= 16.67;
+  }
+
+  function tryPlayerAttack(which){
+    if(player.attackTimer>0) return;
+    player.attackType = which; // 'high'|'mid'|'low'
+    player.attackTimer = 220; // ms swing window
+
+    if(state===State.DUEL && duel){
+      // Hit check: simple frontal arc in front of player
+      const reach = 52;
+      const hitbox = { x: player.x + player.w, y: player.y + (which==='high'?0:(which==='mid'?player.h*0.33:player.h*0.66)) - 8, w: reach, h: 16 };
+
+      // Determine if foe is protected by shield (for shielded kind)
+      let protectedByShield = false;
+      if(duel.foe.kind==='shielded'){
+        const shield = duel.shieldPos; // 'high'|'mid'|'low'
+        if(shield===which) protectedByShield = true;
+      }
+
+      // Flying foes: only vulnerable to 'high'
+      if(duel.foe.kind==='flying' && which!=='high') protectedByShield = true;
+
+      const foeBox = foeAABB();
+      if(!protectedByShield && aabb(hitbox, foeBox)){
+        duel.foeHP -= 1;
+        duel.hitFlash = 120;
+        if(duel.foeHP<=0){ endDuel(true); }
+      }
+    }
+  }
+
+  // ----- Duel Logic -----
+  function beginDuel(foe){
+    state = State.DUEL;
+    hud.mode.textContent = 'Duel';
+    duel = {
+      foe, arenaX: player.x + 40, timer: 0, foeHP: foe.kind==='shielded'?3:(foe.kind==='flying'?2:2),
+      nextAttackAt: 900, pattern: nextFoeAttackZone(),
+      shieldPos: 'mid', shieldTimer: 0, projectiles: [], hitFlash: 0
     };
+  }
+  function endDuel(playerWon){
+    state = State.RUN;
+    hud.mode.textContent = 'Running';
+    duel = null;
+    // Resume scroll with a little reward or penalty
+    if(playerWon) score += 150; else score = Math.max(0, score - 100);
+  }
 
-    let gravity = 1;
-    let playerHealth = 3;
-    let mobHealth = 3;
-    let swordSwing = null;
-    let swingTimer = 0;
+  function foeAABB(){
+    if(!duel) return {x:0,y:0,w:0,h:0};
+    const f = duel.foe;
+    return { x: duel.arenaX + 50, y: f.kind==='flying' ? groundY-160 : groundY-48, w: f.kind==='flying'?44:40, h: f.kind==='flying'?32:48 };
+  }
 
-    let duelActive = false;
-    let duelTimer = 0;
-    let mobInDuel = null;
+  function nextFoeAttackZone(){
+    return ZONES[Math.floor(Math.random()*ZONES.length)];
+  }
 
-    let mobs = [
-      { x: 600, y: 300, type: "grounded", shieldZone: "mid", duel: true },
-      { x: 1000, y: 200, type: "flying", duel: true }
-    ];
+  function updateDuel(dt){
+    duel.timer += dt;
 
-    function getRandomZone() {
-      return ["high", "mid", "low"][Math.floor(Math.random() * 3)];
-    }
-
-    function startDuel(mob) {
-      duelActive = true;
-      mobInDuel = mob;
-      duelTimer = 0;
-      mob.attackZone = getRandomZone();
-      if (mob.type === "grounded") {
-        mob.shieldZone = getRandomZone();
+    // Shield cycling
+    if(duel.foe.kind==='shielded'){
+      duel.shieldTimer += dt;
+      if(duel.shieldTimer > 650){
+        duel.shieldTimer = 0;
+        const choices = ZONES.filter(z => z!==duel.shieldPos);
+        duel.shieldPos = choices[Math.floor(Math.random()*choices.length)];
       }
     }
 
-    function endDuel() {
-      duelActive = false;
-      player.state = "running";
-      mobInDuel.duel = false;
-      mobInDuel = null;
-      mobHealth = 3;
-    }
-
-    function attemptAttack(zone) {
-      swordSwing = zone;
-      swingTimer = 10;
-
-      if (mobInDuel.type === "flying") {
-        if (zone === "high") {
-          mobHealth--;
-        }
-      } else {
-        if (mobInDuel.shieldZone !== zone) {
-          mobHealth--;
-        }
-      }
-
-      if (mobHealth <= 0) {
-        endDuel();
+    // Ranged weapon projectiles
+    if(duel.foe.weapon==='bow'){
+      if(!duel.nextArrowAt) duel.nextArrowAt = 1200;
+      duel.nextArrowAt -= dt;
+      if(duel.nextArrowAt<=0){
+        duel.nextArrowAt = 1300 + Math.random()*700;
+        const zone = nextFoeAttackZone();
+        const p = { x: duel.arenaX + 50, y: groundY - (zone==='high'?190: zone==='mid'?120:84), w:16, h:6, vx: -6.2, zone };
+        duel.projectiles.push(p);
       }
     }
 
-    function handleDuelInput() {
-      if (!duelActive || !mobInDuel) return;
+    // Telegraphed melee/spear/punch attacks
+    duel.nextAttackAt -= dt;
+    if(duel.nextAttackAt <= 0){
+      // Perform attack
+      const zone = duel.pattern; // 'high'|'mid'|'low'
+      const strike = { x: duel.arenaX + 30, y: groundY - (zone==='high'?190: zone==='mid'?120:84), w: 90, h: 24, active: 180 };
+      duel.activeStrike = strike;
+      // next window
+      duel.pattern = nextFoeAttackZone();
+      const base = duel.foe.weapon==='spear'?1100: (duel.foe.weapon==='punch'?850:1000);
+      duel.nextAttackAt = base + Math.random()*500;
+    }
 
-      if (keys["KeyW"]) attemptAttack("high");
-      if (keys["KeyD"]) attemptAttack("mid");
-      if (keys["KeyS"]) attemptAttack("low");
+    // Active strike countdown
+    if(duel.activeStrike){
+      duel.activeStrike.active -= dt;
+      if(duel.activeStrike.active <= 0) duel.activeStrike = null;
+    }
 
-      if (keys["ArrowLeft"] || keys["ArrowRight"]) {
-        if (mobInDuel.attackZone === "mid") {
-          // Dodged
-        } else {
-          playerHealth--;
-        }
-        mobInDuel.attackZone = getRandomZone();
-        if (mobInDuel.type === "grounded") {
-          mobInDuel.shieldZone = getRandomZone();
-        }
+    // Projectiles movement
+    for(let i=duel.projectiles.length-1;i>=0;i--){
+      const p = duel.projectiles[i];
+      p.x += p.vx;
+      const pb = {x:p.x, y:p.y, w:p.w, h:p.h};
+      if(aabb(pb, {x:player.x, y:player.y, w:player.w, h:player.h})){
+        damagePlayer();
+        duel.projectiles.splice(i,1); continue;
+      }
+      if(p.x < player.x - 120) duel.projectiles.splice(i,1);
+    }
+
+    // Resolve foe strike damage window
+    if(duel.activeStrike){
+      const s = duel.activeStrike;
+      const pb = {x:player.x, y:player.y, w:player.w, h:player.h};
+      if(aabb(pb, s)){
+        // Can the player evade by being in a different vertical zone or moving left/right?
+        // In duel, lateral motion helps but hitbox is generous; rely on duck/jump vs zone
+        const zone = s.y < groundY-150 ? 'high' : (s.y < groundY-100 ? 'mid' : 'low');
+        const dodged = (zone==='high' && player.y+player.h < groundY-120) ||
+                       (zone==='low' && (keys.has('ArrowDown')||player.h<40)) ||
+                       (zone==='mid' && (player.y+player.h<groundY-90 || keys.has('ArrowDown')));
+        if(!dodged) damagePlayer();
       }
     }
 
-    function updateDuel() {
-      if (!duelActive || !mobInDuel) return;
-      duelTimer++;
-      if (duelTimer > 90) {
-        duelTimer = 0;
-        mobInDuel.attackZone = getRandomZone();
-        if (mobInDuel.type === "grounded") {
-          mobInDuel.shieldZone = getRandomZone();
-        }
+    // End duel if player walks too far? Keep within arena via clamp in physics
+  }
+
+  function damagePlayer(){
+    if(player.invuln>0) return;
+    player.hearts -= 1; player.invuln = 900;
+    if(player.hearts<=0){
+      state = State.GAMEOVER;
+      hud.over.hidden = false;
+      hud.final.textContent = `Score: ${Math.floor(score)}`;
+    }
+  }
+
+  // ----- Runner Mode Update -----
+  function updateRun(dt){
+    const runSpeed = 5.2;
+    scrollX += runSpeed;
+    score += dt * 0.06;
+
+    obstacleTimer -= dt;
+    if(obstacleTimer<=0){
+      obstacleTimer = 500 + Math.random()*900;
+      spawnObstacle();
+    }
+
+    spawnTimer -= dt;
+    if(spawnTimer<=0){
+      spawnTimer = 1800 + Math.random()*1600;
+      spawnMob();
+    }
+
+    // Move world left
+    obstacles.forEach(o=> o.x -= runSpeed);
+    for(let i=obstacles.length-1;i>=0;i--){ if(obstacles[i].x + obstacles[i].w < -20) obstacles.splice(i,1); }
+
+    mobs.forEach(m=> m.x -= m.speed);
+    for(let i=mobs.length-1;i>=0;i--){ if(mobs[i].x + mobs[i].w < -20) mobs.splice(i,1); }
+
+    // Collisions
+    for(const o of obstacles){
+      if(aabb({x:player.x,y:player.y,w:player.w,h:player.h}, o)){
+        // Allow ducking under tall arch (simulate by lower height when ducking)
+        damagePlayer();
       }
     }
 
-    function update() {
-      if (player.state === "running") {
-        if (keys["ArrowUp"] && player.grounded) {
-          player.vy = -15;
-          player.grounded = false;
-        }
-
-        if (keys["ArrowDown"] && player.grounded) {
-          player.height = 30;
-        } else {
-          player.height = 60;
-        }
-
-        player.y += player.vy;
-        player.vy += gravity;
-
-        if (player.y >= 300) {
-          player.y = 300;
-          player.vy = 0;
-          player.grounded = true;
-        }
-
-        mobs.forEach(mob => {
-          if (mob.x > player.x + 50 && mob.duel && player.state === "running") {
-            mob.x -= 3;
-          } else if (mob.duel && !duelActive) {
-            player.state = "dueling";
-            startDuel(mob);
-          }
-        });
-      }
-
-      if (duelActive) {
-        handleDuelInput();
-        updateDuel();
+    // If collide with a mob -> enter duel
+    for(let i=0;i<mobs.length;i++){
+      const m = mobs[i];
+      const pb = {x:player.x,y:player.y,w:player.w,h:player.h};
+      if(aabb(pb, m)){
+        // Halt and face off
+        const foe = {...m};
+        mobs.splice(i,1);
+        beginDuel(foe);
+        break;
       }
     }
+  }
 
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // ----- Rendering -----
+  function drawGround(){
+    ctx.fillStyle = '#0b0c10';
+    ctx.fillRect(0, groundY, W, H-groundY);
+    // lanes
+    ctx.strokeStyle = 'rgba(255,255,255,.06)';
+    ctx.beginPath();
+    for(let x = -((scrollX*0.5)%40); x < W; x+=40){
+      ctx.moveTo(x, groundY+2); ctx.lineTo(x+20, groundY+2);
+    }
+    ctx.stroke();
+  }
 
-      // Health Bars
-      ctx.fillStyle = "white";
-      ctx.fillText("Player HP", 20, 20);
-      for (let i = 0; i < playerHealth; i++) {
-        ctx.fillStyle = "blue";
-        ctx.fillRect(20 + i * 30, 30, 20, 10);
-      }
+  function drawParallax(){
+    // Distant skyline blocks
+    ctx.fillStyle = 'rgba(255,255,255,.06)';
+    const baseY = groundY - 120;
+    for(let i=0;i<12;i++){
+      const w = 60 + (i%3)*20;
+      const x = (i*180 - (scrollX*0.2)%180);
+      ctx.fillRect(x, baseY - (i%4)*20, w, 100 + (i%3)*22);
+    }
+  }
 
-      if (duelActive && mobInDuel) {
-        ctx.fillStyle = "white";
-        ctx.fillText("Mob HP", canvas.width - 120, 20);
-        for (let i = 0; i < mobHealth; i++) {
-          ctx.fillStyle = "red";
-          ctx.fillRect(canvas.width - 120 + i * 30, 30, 20, 10);
-        }
-      }
+  function drawPlayer(){
+    // Body
+    ctx.save();
+    ctx.globalAlpha = player.invuln>0 ? 0.7 : 1;
+    ctx.fillStyle = '#66e0a3';
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    // Head
+    ctx.fillStyle = '#b7ffe0';
+    ctx.fillRect(player.x+8, player.y-16, 20, 16);
+    // Sword (attack arc)
+    if(player.attackTimer>0){
+      const t = player.attackTimer/220;
+      ctx.strokeStyle = '#ffca3a'; ctx.lineWidth = 3;
+      ctx.beginPath();
+      const yOff = player.attackType==='high'? -22 : (player.attackType==='mid'? -6 : 10);
+      ctx.arc(player.x+player.w+8, player.y+player.h*0.5+yOff, 28, 0, Math.PI* (1.5*(1-t)));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
-      // Player
-      ctx.fillStyle = "blue";
-      ctx.fillRect(player.x, player.y, player.width, player.height);
+  function drawObstacles(){
+    ctx.fillStyle = '#2b2f3a';
+    obstacles.forEach(o=>{
+      ctx.fillRect(o.x,o.y,o.w,o.h);
+      ctx.strokeStyle = 'rgba(255,255,255,.08)';
+      ctx.strokeRect(o.x,o.y,o.w,o.h);
+    });
+  }
 
-      // Sword Swing
-      if (swingTimer > 0 && swordSwing) {
-        ctx.fillStyle = "cyan";
-        let offsetY = swordSwing === "high" ? -20 : swordSwing === "mid" ? 10 : 30;
-        ctx.fillRect(player.x + player.width, player.y + offsetY, 20, 10);
-        swingTimer--;
-        if (swingTimer === 0) swordSwing = null;
-      }
+  function drawMob(m){
+    ctx.save();
+    // Base color per type
+    const color = m.kind==='flying'? '#6ecbff' : (m.kind==='shielded'? '#b29cff' : '#ff9f7a');
+    const y = m.kind==='flying'? (groundY-160) : (groundY-48);
+    const h = m.kind==='flying'? 32 : 48; const w = m.kind==='flying'? 44:40;
+    ctx.fillStyle = color;
+    ctx.fillRect(m.x, y, w, h);
 
-      // Mobs
-      mobs.forEach(mob => {
-        ctx.fillStyle = mob.type === "flying" ? "red" : "green";
-        ctx.fillRect(mob.x, mob.y, 40, 40);
+    // Weapon glyph
+    ctx.fillStyle = '#111';
+    ctx.font = '12px system-ui';
+    const glyphs = { sword:'⚔', spear:'🗡', bow:'🏹', punch:'✊' };
+    ctx.fillText(glyphs[m.weapon]||'?', m.x+8, y+18);
 
-        if (duelActive && mobInDuel === mob) {
-          // Attack zone
-          ctx.fillStyle = "red";
-          if (mob.attackZone === "high") ctx.fillRect(mob.x, mob.y - 20, 40, 10);
-          if (mob.attackZone === "mid") ctx.fillRect(mob.x, mob.y + 10, 40, 10);
-          if (mob.attackZone === "low") ctx.fillRect(mob.x, mob.y + 30, 40, 10);
-
-          // Shield zone
-          if (mob.type === "grounded") {
-            ctx.fillStyle = "gray";
-            if (mob.shieldZone === "high") ctx.fillRect(mob.x, mob.y - 20, 40, 10);
-            if (mob.shieldZone === "mid") ctx.fillRect(mob.x, mob.y + 10, 40, 10);
-            if (mob.shieldZone === "low") ctx.fillRect(mob.x, mob.y + 30, 40, 10);
-          }
-        }
-      });
+    if(m.kind==='shielded'){
+      ctx.strokeStyle = '#ddd'; ctx.beginPath(); ctx.arc(m.x+w/2, y+h/2, 22, 0, Math.PI*2); ctx.stroke();
     }
 
-    function gameLoop() {
-      update();
-      draw();
-      requestAnimationFrame(gameLoop);
+    ctx.restore();
+  }
+
+  function drawDuel(){
+    const foe = duel.foe; const box = foeAABB();
+
+    // Arena marker
+    ctx.strokeStyle = 'rgba(255,255,255,.15)';
+    ctx.strokeRect(duel.arenaX-70, groundY-100, 180, 120);
+
+    // Foe
+    ctx.fillStyle = foe.kind==='flying'? '#6ecbff' : (foe.kind==='shielded'? '#b29cff' : '#ff9f7a');
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+
+    // Shield indicator
+    if(foe.kind==='shielded'){
+      const map = { high: box.y-12, mid: box.y+8, low: box.y+24 };
+      ctx.fillStyle = '#222';
+      ctx.fillRect(box.x-10, map[duel.shieldPos], 10, 10);
+      ctx.strokeStyle = '#ddd'; ctx.strokeRect(box.x-10, map[duel.shieldPos], 10, 10);
     }
 
-    gameLoop();
+    // Enemy weapon glyph
+    ctx.fillStyle = '#111'; ctx.font = '14px system-ui';
+    const glyphs = { sword:'⚔', spear:'🗡', bow:'🏹', punch:'✊' };
+    ctx.fillText(glyphs[foe.weapon]||'?', box.x+8, box.y+18);
+
+    // Telegraph next zone
+    const zone = duel.pattern;
+    const zy = zone==='high'? box.y-30 : zone==='mid'? box.y-10 : box.y+10;
+    ctx.fillStyle = 'rgba(255,255,255,.2)';
+    ctx.fillRect(box.x-6, zy, 4, 24);
+
+    // Active strike
+    if(duel.activeStrike){
+      ctx.fillStyle = 'rgba(255,80,80,.4)';
+      const s = duel.activeStrike; ctx.fillRect(s.x, s.y, s.w, s.h);
+    }
+
+    // Projectiles
+    ctx.fillStyle = '#ffca3a';
+    duel.projectiles.forEach(p=>{ ctx.fillRect(p.x, p.y, p.w, p.h); });
+
+    // Hit flash
+    if(duel.hitFlash>0){ duel.hitFlash-=16.67; ctx.fillStyle='rgba(255,255,255,.1)'; ctx.fillRect(box.x-4, box.y-4, box.w+8, box.h+8); }
+
+    // Foe HP bar
+    const hpw = 100; const perc = Math.max(0, duel.foeHP)/3;
+    ctx.fillStyle = 'rgba(255,255,255,.15)'; ctx.fillRect(duel.arenaX-60, groundY-110, hpw, 8);
+    ctx.fillStyle = '#66e0a3'; ctx.fillRect(duel.arenaX-60, groundY-110, hpw*perc, 8);
+  }
+
+  function drawUI(){
+    hud.score.textContent = `Score: ${Math.floor(score)}`;
+    hud.hearts.textContent = '❤︎'.repeat(Math.max(0, player.hearts));
+    hud.mode.textContent = state===State.DUEL? 'Duel' : state===State.RUN? 'Running' : state===State.MENU? 'Menu' : 'Game Over';
+  }
+
+  // ----- Main Loop -----
+  let last = 0;
+  function frame(t){
+    const dt = Math.min(32, t - last || 16.67); last = t;
+    ctx.clearRect(0,0,W,H);
+    drawParallax();
+
+    if(state===State.RUN){ updateRun(dt); }
+    applyPlayerPhysics();
+
+    drawGround();
+    if(state===State.RUN){
+      drawObstacles();
+      mobs.forEach(drawMob);
+    }
+
+    if(state===State.DUEL){ updateDuel(dt); drawDuel(); }
+
+    drawPlayer();
+    drawUI();
+
+    // Edge-trigger keys consumed
+    justPressed.clear();
+    requestAnimationFrame(frame);
+  }
+
+  // ----- Input bindings for attack -----
+  addEventListener('keydown', e=>{
+    if(state===State.MENU && (e.key==='Enter' || e.key===' ')) resetGame();
+    if(state===State.GAMEOVER && (e.key==='Enter' || e.key===' ')) resetGame();
+    if(e.key==='j' || e.key==='J') tryPlayerAttack('high');
+    if(e.key==='k' || e.key==='K') tryPlayerAttack('mid');
+    if(e.key==='l' || e.key==='L') tryPlayerAttack('low');
+  });
+
+  // Start loop
+  requestAnimationFrame(frame);
   </script>
 </body>
 </html>
