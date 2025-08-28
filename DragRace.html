@@ -10,6 +10,7 @@
       font-family: sans-serif;
       text-align: center;
       padding: 10px;
+      overflow: hidden;
     }
 
     #track {
@@ -24,7 +25,7 @@
 
     .crowd {
       position: absolute;
-      width: 40px;
+      width: 30px;
       height: 100%;
       top: 0;
       background: repeating-linear-gradient(
@@ -34,10 +35,23 @@
         #777 10px,
         #777 20px
       );
+      z-index: 0;
     }
 
-    #leftCrowd { left: -44px; }
-    #rightCrowd { right: -44px; }
+    #leftCrowd { left: 0; }
+    #rightCrowd { right: 0; }
+
+    .lane {
+      position: absolute;
+      width: 120px;
+      height: 100%;
+      top: 0;
+      background: transparent;
+      z-index: 1;
+    }
+
+    #lane1 { left: 30px; }
+    #lane2 { right: 30px; }
 
     .car {
       position: absolute;
@@ -45,20 +59,19 @@
       height: 100px;
       border-radius: 10px 10px 5px 5px;
       background: red;
-      left: 50%;
-      transform: translateX(-50%);
+      box-shadow: 0 -10px 0 #222 inset;
     }
 
     #mustang {
       background: linear-gradient(to bottom, firebrick 60%, black 40%);
       top: 480px;
-      box-shadow: 0 -10px 0 #222 inset;
+      left: 45px;
     }
 
     #challenger {
       background: linear-gradient(to bottom, steelblue 60%, black 40%);
       top: 480px;
-      box-shadow: 0 -10px 0 #222 inset;
+      left: 195px;
     }
 
     .headlights {
@@ -79,6 +92,7 @@
       border-radius: 50%;
       opacity: 0;
       animation: puff 0.5s ease-out;
+      z-index: 2;
     }
 
     @keyframes puff {
@@ -125,6 +139,8 @@
   <div id="track">
     <div id="leftCrowd" class="crowd"></div>
     <div id="rightCrowd" class="crowd"></div>
+    <div id="lane1" class="lane"></div>
+    <div id="lane2" class="lane"></div>
     <div id="mustang" class="car"><div class="headlights"></div></div>
     <div id="challenger" class="car"><div class="headlights"></div></div>
   </div>
@@ -176,11 +192,15 @@
     document.addEventListener('keydown', (e) => {
       keysPressed[e.key.toLowerCase()] = true;
 
-      if (e.key === 'ArrowUp' && !boostMustang) {
-        boostMustang = true;
-        spawnSmoke(mustang);
-        setTimeout(() => boostMustang = false, 1000);
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!boostMustang) {
+          boostMustang = true;
+          spawnSmoke(mustang);
+          setTimeout(() => boostMustang = false, 1000);
+        }
       }
+
       if (e.key.toLowerCase() === 'w' && !boostChallenger) {
         boostChallenger = true;
         spawnSmoke(challenger);
@@ -240,9 +260,4 @@
 
       leaderboard.innerHTML = `<strong>🏆 Leaderboard:</strong><br>` +
         scores.slice(0, 3).map((s, i) =>
-          `${i + 1}. ${s.winner} - ${s.time}s`
-        ).join('<br>');
-    }
-  </script>
-</body>
-</html>
+          `${i + 1}. ${s
