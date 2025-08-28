@@ -2,20 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Muscle Car Drag Racing</title>
+  <title>American Muscle Drag Racing</title>
   <style>
-    body {
-      font-family: sans-serif;
-      background-color: #222;
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #111;
+      font-family: 'Segoe UI', sans-serif;
       color: #fff;
-      text-align: center;
     }
     #gameCanvas {
-      width: 800px;
-      height: 400px;
-      background: url('track1.jpg') no-repeat center;
+      width: 100vw;
+      height: 100vh;
+      background-image: url('track1.jpg'); /* Drag strip background */
       background-size: cover;
-      margin: 20px auto;
+      background-position: center;
       position: relative;
     }
     .car {
@@ -23,80 +25,84 @@
       height: 50px;
       background: red;
       position: absolute;
-      bottom: 20px;
-      left: 0;
-      transition: left 0.2s ease;
+      bottom: 50px;
+      left: 50px;
+      transition: transform 0.1s ease;
     }
     .girl {
       position: absolute;
-      top: 10px;
-      width: 100px;
+      width: 80px;
       height: 150px;
       background: pink;
+      top: 20px;
     }
-    #startGirl { left: 10px; }
-    #finishGirl { right: 10px; }
-    #controls {
-      margin-top: 20px;
-    }
-    button {
-      margin: 5px;
+    #startGirl { left: 20px; }
+    #finishGirl { right: 20px; }
+    #startBtn {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
       padding: 10px 20px;
-      font-size: 16px;
+      font-size: 18px;
+      background: #ff0044;
+      border: none;
+      color: white;
+      cursor: pointer;
+      z-index: 10;
     }
   </style>
 </head>
 <body>
-  <h1>🏁 Muscle Car Drag Racing</h1>
   <div id="gameCanvas">
+    <button id="startBtn" onclick="startRace()">Start Race</button>
     <div class="girl" id="startGirl"></div>
     <div class="girl" id="finishGirl"></div>
     <div class="car" id="playerCar"></div>
   </div>
-  <div id="controls">
-    <button onclick="useNitrous()">Nitrous Boost</button>
-    <button onclick="manualShift()">Manual Shift</button>
-    <button onclick="drift()">Drift</button>
-    <button onclick="startRace()">Start Race</button>
-  </div>
 
   <script>
-    const car = document.getElementById('playerCar');
     const canvas = document.getElementById('gameCanvas');
-    const tracks = ['track1.jpg', 'track2.jpg', 'track3.jpg'];
+    const car = document.getElementById('playerCar');
+    let x = 50, y = window.innerHeight - 100;
+    let speed = 10;
 
-    function randomizeTrack() {
-      const randomTrack = tracks[Math.floor(Math.random() * tracks.length)];
-      canvas.style.backgroundImage = `url('${randomTrack}')`;
+    function startRace() {
+      x = 50;
+      y = window.innerHeight - 100;
+      updateCarPosition();
     }
 
-    let position = 0;
-    function moveCar(distance) {
-      position += distance;
-      car.style.left = position + 'px';
-      if (position >= 700) {
-        alert("🏆 You finished the race!");
-        position = 0;
-        car.style.left = '0px';
+    function updateCarPosition() {
+      car.style.left = x + 'px';
+      car.style.top = y + 'px';
+    }
+
+    document.addEventListener('keydown', (e) => {
+      switch (e.key.toLowerCase()) {
+        case 'w': y -= speed; break; // Forward
+        case 's': y += speed; break; // Reverse
+        case 'a': x -= speed; break; // Left
+        case 'd': x += speed; break; // Right
+        case 'l': speedBoost(); break; // Nitrous
+        case ';': manualShift(); break; // Manual Shift
+        case "'": drift(); break; // Drift
       }
-    }
+      updateCarPosition();
+    });
 
-    function useNitrous() {
-      moveCar(100);
+    function speedBoost() {
+      x += 100;
     }
 
     function manualShift() {
-      moveCar(50);
+      x += 50;
     }
 
     function drift() {
-      moveCar(30);
-    }
-
-    function startRace() {
-      randomizeTrack();
-      position = 0;
-      car.style.left = '0px';
+      x += 30;
+      car.style.transform = 'rotate(-15deg)';
+      setTimeout(() => car.style.transform = 'rotate(0deg)', 200);
     }
   </script>
 </body>
